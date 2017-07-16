@@ -21,8 +21,6 @@ import json
 from scipy.special import expit
 import pdb
 
-dtype = torch.FloatTensor
-
 if sys.version_info >= (3,):
     xrange = range
 
@@ -37,10 +35,16 @@ sequence_length = 2000
 n_in            = 500
 n_out           = 3
 visualize_while_training = False
+use_skip_connections = False
+use_sparse_feedback = False
 
-teach_prob = 0.1
-W_range = [0.5, 0.5, 0.5]
-b_range = [0.1, 0.1, 0.1]
+teach_prob = 0.2
+W_range = [0.5, 0.5, 0.5, 0.5, 0.5]
+W_2_range = [0.5, 0.5]
+b_range = [0.1, 0.1, 0.1, 0.1, 0.1]
+Y_range = [1, 1, 1, 1]
+Y_2_range = [1, 1, 1]
+c_range = [0.1, 0.1, 0.1, 0.1]
 
 x_set = np.zeros((n_in, sequence_length)).astype(np.float32)
 for i in range(n_in):
@@ -51,18 +55,14 @@ for i in range(n_in):
 t_set = np.zeros((n_out, sequence_length)).astype(np.float32)
 for i in range(n_out):
     x = np.arange(sequence_length)
-    t_set[i] = 0.5*(np.sin(np.random.uniform(0.01, 0.1)*x + np.random.uniform(0, 20)) + 1)*np.random.uniform(0.1, 0.4)
-    t_set[i] += 0.5*(np.cos(np.random.uniform(0.01, 0.2)*x + np.random.uniform(0, 20)) + 1)*np.random.uniform(0.1, 0.4)
-
-
-train = data_utils.TensorDataset(torch.from_numpy(x_set.T), torch.from_numpy(t_set.T))
-train_loader = data_utils.DataLoader(train)
+    t_set[i] = 0.2 + 0.5*(np.sin(np.random.uniform(0.01, 0.1)*x + np.random.uniform(0, 20)) + 1)*np.random.uniform(0.1, 0.3)
+    t_set[i] += 0.5*(np.cos(np.random.uniform(0.01, 0.05)*x + np.random.uniform(0, 20)) + 1)*np.random.uniform(0.1, 0.3)
 
 # np.save("x_set.npy", x_set)
 # np.save("t_set.npy", t_set)
 
-# x_set = np.load("x_set.npy")
-# t_set = np.load("t_set.npy")
+x_set = np.load("x_set.npy")
+t_set = np.load("t_set.npy")
 
 colors = ["red", "blue", "green", "yellow", "brown", "purple", "white", "cyan", "orange", "magenta"][:n_out]
 
@@ -76,12 +76,15 @@ def get_x(n):
 def get_t(n):
     return t_set[:, n][:, np.newaxis]
 
+def sigmoid(x):
+    return expit(x)
+
 # ---------------------------------------------------------------
 """                     Network class                         """
 # ---------------------------------------------------------------
 
 class Network:
-    def __init__(self, n):
+    def __init__(self, n, use_h=False):
         '''
         Initialize the network. Note: This also loads the MNIST dataset.
 
@@ -98,14 +101,16 @@ class Network:
         self.n_in  = get_x(0).shape[0] # input size
         self.n_out = self.n[-1]      # output size
 
+        self.use_h = use_h
+
         self.current_epoch = None # current epoch of simulation
 
         print("Creating network with {} layers.".format(self.M))
         print("--------------------------------")
 
-        self.init_layers()
+        self.init_layers(use_h=use_h)
 
-    def init_layers(self):
+    def init_layers(self, use_h=False):
         '''
         Create the layers of the network.
         '''
@@ -115,12 +120,12 @@ class Network:
 
         # create all layers
         if self.M == 1:
-            self.l.append(finalLayer(net=self, m=-1, f_input_size=self.n_in))
+            self.l.append(finalLayer(net=self, m=-1, f_input_size=self.n_in, use_h=use_h))
         else:
-            self.l.append(hiddenLayer(net=self, m=0, f_input_size=self.n_in))
+            self.l.append(hiddenLayer(net=self, m=0, f_input_size=self.n_in, b_input_size=self.n[1], use_h=use_h))
             for m in xrange(1, self.M-1):
-                self.l.append(hiddenLayer(net=self, m=m, f_input_size=self.n[m-1]))
-            self.l.append(finalLayer(net=self, m=self.M-1, f_input_size=self.n[-2]))
+                self.l.append(hiddenLayer(net=self, m=m, f_input_size=self.n[m-1], b_input_size=self.n[m+1], use_h=use_h))
+            self.l.append(finalLayer(net=self, m=self.M-1, f_input_size=self.n[-2], use_h=use_h))
 
     def out(self, x, t):
         '''
@@ -128,22 +133,24 @@ class Network:
         '''
 
         if self.M == 1:
-            self.l[0].out(x)
+            self.l[0].out(x, t)
         else:
-            self.l[0].out(x)
+            self.l[0].out(x, self.l[1].y_backward)
 
             for m in xrange(1, self.M-1):
-                self.l[m].out(self.l[m-1].y)
+                self.l[m].out(self.l[m-1].y_forward, self.l[m+1].y_backward)
 
-            self.l[-1].out(self.l[-2].y)
+            self.l[-1].out(self.l[-2].y_forward, t)
+
+            for m in xrange(self.M-2, 0, -1):
+                self.l[m].out(self.l[m-1].y_forward, self.l[m+1].y_backward)
+
+            self.l[0].out(x, self.l[1].y_backward)
 
         if t is not None:
-            # update feedforward weights for the final layer
-            self.l[-1].calc_error(t)
-
-            for m in xrange(self.M-2, -1, -1): # for the hidden layers:
+            for m in xrange(self.M-1, -1, -1): # for the hidden layers:
                 # update weights
-                self.l[m].calc_error(self.l[m+1].W, self.l[m+1].E)
+                self.l[m].calc_error()
 
             # update feedforward weights for the final layer
             self.l[-1].update_W(self.f_etas[-1])
@@ -151,8 +158,11 @@ class Network:
             for m in xrange(self.M-2, -1, -1): # for the hidden layers:
                 # update weights
                 self.l[m].update_W(self.f_etas[m])
+        # else:
+            for m in xrange(self.M-2, -1, -1): # for the hidden layers:
+                self.l[m].update_Y(self.b_etas[m])
 
-    def train(self, f_etas, b_etas, n_epochs, save_simulation, simulations_folder=default_simulations_folder, folder_name="", overwrite=False, simulation_notes=None, current_epoch=None):
+    def train(self, f_etas, b_etas, n_epochs, save_simulation, simulations_folder=default_simulations_folder, folder_name="", overwrite=False, simulation_notes=None, current_epoch=None, plot=False):
         print("Starting training.\n")
 
         if current_epoch != None:
@@ -239,26 +249,30 @@ class Network:
         avg_loss = 0
         no_t_count = 0
 
-        # Create the figure
-        self.figure = plt.figure(figsize=(15, 6), facecolor='white')
-        self.animation_axis = plt.Axes(self.figure, [0.07, 0.07, 0.86, 0.36])
-        self.figure.add_axes(self.animation_axis)
-        self.target_lines = [ self.animation_axis.plot([], [], color=colors[i], lw=1)[0] for i in range(self.n_out) ]
-        self.output_lines = [ self.animation_axis.plot([], [], color=colors[i], lw=1, linestyle='--', alpha=0.5)[0] for i in range(self.n_out) ]
+        if plot:
+            # Create the figure
+            self.figure = plt.figure(figsize=(15, 6), facecolor='white')
+            self.animation_axis = plt.Axes(self.figure, [0.07, 0.07, 0.86, 0.36])
+            self.figure.add_axes(self.animation_axis)
+            self.target_lines = [ self.animation_axis.plot([], [], color=colors[i], lw=1)[0] for i in range(self.n_out) ]
+            self.output_lines = [ self.animation_axis.plot([], [], color=colors[i], lw=1, linestyle='--', alpha=0.5)[0] for i in range(self.n_out) ]
 
-        self.animation_axis_2 = plt.Axes(self.figure, [0.07, 0.57, 0.86, 0.36])
-        self.figure.add_axes(self.animation_axis_2)
-        self.loss_line = self.animation_axis_2.plot([], [], color='red', lw=1)[0]
+            self.animation_axis_2 = plt.Axes(self.figure, [0.07, 0.57, 0.86, 0.36])
+            self.figure.add_axes(self.animation_axis_2)
+            self.loss_line = self.animation_axis_2.plot([], [], color='red', lw=1)[0]
 
-        # Show the plot
-        plt.ion()
-        plt.show()
+            # Show the plot
+            plt.ion()
+            plt.show()
 
-        avg_losses = []
+        avg_losses = np.zeros((self.M, int(n_epochs*sequence_length/100.0)))
+        counter = 0
         scatter_points = []
 
         self.targets = np.zeros((sequence_length*n_epochs, self.n_out))
         self.outputs = np.zeros((sequence_length*n_epochs, self.n_out))
+
+        show_target = False
 
         for k in xrange(n_epochs):
             self.targets *= 0
@@ -270,47 +284,63 @@ class Network:
                     start_time = time.time()
 
                 # print every 100 examples
-                if (n+1) % 100 == 0:
-                    sys.stdout.write("\x1b[2K\rEpoch {0}, example {1}/{2}. ".format(self.current_epoch + 1, n+1, sequence_length))
-                    sys.stdout.flush()
+                # if (n+1) % 100 == 0:
+                #     sys.stdout.write("\x1b[2K\rEpoch {0}, example {1}/{2}. ".format(self.current_epoch + 1, n+1, sequence_length))
+                #     sys.stdout.flush()
 
-                # self.x = torch.from_numpy(get_x(n))
-                # self.t = torch.from_numpy(get_t(n))
+                self.x = get_x(n)
+                self.t = get_t(n)
 
-                self.x, self.t = next(iter(train_loader))
+                # self.x, self.t = next(iter(train_loader))
 
                 # print(self.t)
 
-                if np.random.uniform(0, 1) >= 1 - teach_prob and k < n_epochs-1:
+                if (k < n_epochs-1 and np.random.uniform(0, 1) >= 1 - teach_prob):
                     no_t = False
-                    t    = self.t.t()
+                    t    = self.t
+                    show_target = False
                 else:
                     no_t = True
                     t    = None
                     no_t_count += 1
 
+                # if k == n_epochs - 1 and n > 0:
+                #     self.x *= 0
+
                 # do a pass through the network & update weights
-                self.out(self.x.t(), t)
+                self.out(self.x, t)
 
-                avg_loss += torch.mean((self.t - self.l[-1].y)**2)
+                # t_2 = self.t
 
-                self.targets[k*sequence_length + n] = self.t.numpy()[:, 0]
-                self.outputs[k*sequence_length + n] = self.l[-1].y.numpy()[:, 0]
+                if not no_t:
+                    for m in xrange(self.M):
+                        avg_losses[m, counter] += self.l[m].loss
 
-                if (visualize_while_training and not no_t):
+                    # if self.l[-1].loss > 0.002:
+                    #     show_target = True
+
+                # avg_loss += self.l[-1].loss
+
+                self.targets[k*sequence_length + n] = self.t[:, 0]
+                self.outputs[k*sequence_length + n] = self.l[-1].y_forward[:, 0]
+
+                if visualize_while_training and (not no_t) and plot:
                     for l in xrange(self.n_out):
-                        scatter_point = self.animation_axis.scatter(n, self.l[-1].y[l], c=colors[l], s=10)
+                        scatter_point = self.animation_axis.scatter(n, self.l[-1].y_forward[l], c=colors[l], s=10)
                         scatter_points.append(scatter_point)
 
+                if (n+1) % 100 == 0:
+                    if 100 - no_t_count > 0:
+                        avg_losses[:, counter] /= (100 - no_t_count)
+                    no_t_count = 0
+                    counter += 1
+
                 if (n+1) % 1000 == 0:
-                    if n != sequence_length - 1:
-                        sys.stdout.write("\x1b[2K\rEpoch {0}, example {1}/{2}. ".format(self.current_epoch + 1, n+1, sequence_length))
+                    # if n != sequence_length - 1:
+                    #     sys.stdout.write("\x1b[2K\rEpoch {0}, example {1}/{2}. ".format(self.current_epoch + 1, n+1, sequence_length))
 
-                    avg_loss /= 1000
-                    print("Average loss: {}. ".format(avg_loss))
+                    print("Epoch {}, t={}. Average loss: {}. ".format(self.current_epoch + 1, n+1, avg_losses[-1, counter-1]))
 
-                    avg_losses.append(avg_loss)
-                    avg_loss   = 0
                     no_t_count = 0
 
                     # get end time & reset start time
@@ -319,7 +349,7 @@ class Network:
                     print("T: {0:.3f}s.\n".format(time_elapsed))
                     start_time = None
 
-            if visualize_while_training:
+            if visualize_while_training and plot:
                 for l in xrange(self.n_out):
                     min_x = max(0, k*sequence_length-1000)
                     max_x = k*n_epochs
@@ -343,9 +373,9 @@ class Network:
             # update latest epoch counter
             self.current_epoch += 1
 
-        if not visualize_while_training:
+        if not visualize_while_training and plot:
             for l in xrange(self.n_out):
-                min_x = max(0, n_epochs*sequence_length-1000)
+                min_x = max(0, n_epochs*sequence_length-2000)
                 max_x = n_epochs*sequence_length
                 self.target_lines[l].set_data(np.arange(min_x, max_x), self.targets[min_x:max_x, l])
                 self.output_lines[l].set_data(np.arange(min_x, max_x), self.outputs[min_x:max_x, l])
@@ -353,7 +383,7 @@ class Network:
                 self.animation_axis.relim()
                 self.animation_axis.autoscale_view(scalex=True, scaley=True)
 
-                self.loss_line.set_data(range(len(avg_losses)), avg_losses)
+                self.loss_line.set_data(range(len(avg_losses[-1])), avg_losses[-1])
                 self.animation_axis_2.relim()
                 self.animation_axis_2.autoscale_view(scalex=True, scaley=True)
 
@@ -366,6 +396,8 @@ class Network:
                 sim_end_time = datetime.datetime.now()
                 print("-----------------------------", file=simulation_file)
                 print("End time: {}".format(sim_end_time), file=simulation_file)
+
+        return avg_losses
 
     def save_weights(self, path, prefix=""):
         '''
@@ -401,49 +433,139 @@ class Network:
 
         print("--------------------------------")
 
+    def set_weights(self, W_list, b_list, Y_list, c_list):
+        for m in xrange(self.M):
+            self.l[m].W = W_list[m].copy()
+            self.l[m].b = b_list[m].copy()
+
+            if m < self.M-1:
+                self.l[m].Y = Y_list[m].copy()
+                self.l[m].c = c_list[m].copy()
+
+                if use_sparse_feedback:
+                    self.l[m].Y_dropout_indices = np.random.choice(len(self.l[m].Y.ravel()), int(0.5*len(self.l[m].Y.ravel())), False)
+                    self.l[m].Y.ravel()[self.l[m].Y_dropout_indices] = 0
+
 # ---------------------------------------------------------------
 """                     Layer classes                         """
 # ---------------------------------------------------------------
 
 class Layer:
-    def __init__(self, net, m, f_input_size):
+    def __init__(self, net, m, f_input_size, use_h=False):
         self.net      = net
         self.m        = m
         self.size     = self.net.n[m]
-        self.y        = torch.from_numpy(np.zeros((self.size, 1)).astype(np.float32))
-        self.t        = torch.from_numpy(np.zeros((self.size, 1)).astype(np.float32))
-        self.f_input  = torch.from_numpy(np.zeros((f_input_size, 1)).astype(np.float32))
-        self.b_input  = torch.from_numpy(np.zeros((self.size, 1)).astype(np.float32))
-        self.b_input_old = torch.from_numpy(np.zeros((self.size, 1)).astype(np.float32))
+        self.y_forward  = np.zeros((self.size, 1))
+        self.y_backward = np.zeros((self.size, 1))
+        self.E = np.zeros((self.size, 1))
+        self.y_prev   = np.zeros((self.size, 1))
+        self.t        = np.zeros((self.size, 1))
+        self.t_prev   = np.zeros((self.size, 1))
+        self.f_input  = np.zeros((f_input_size, 1))
+        self.b_input  = np.zeros((self.size, 1))
+        self.b_input_old = np.zeros((self.size, 1))
 
-        self.W = torch.from_numpy(W_range[self.m]*np.random.uniform(-1, 1, size=(self.size, f_input_size)).astype(np.float32))
-        self.b = torch.from_numpy(b_range[self.m]*np.ones((self.size, 1)).astype(np.float32))
+        self.W = W_range[self.m]*np.random.uniform(-1, 1, size=(self.size, f_input_size))
+        self.b = b_range[self.m]*np.ones((self.size, 1))
 
     def out(self, f_input):
         self.f_input = f_input
 
-        self.y = torch.sigmoid(self.W.mm(f_input) + self.b)
+        self.y_forward = sigmoid(np.dot(self.W, self.f_input) + self.b)
 
     def update_W(self, f_eta):
-        self.delta_W = self.E.mm(self.f_input.t())
+        self.delta_W = np.dot(self.E, self.f_input.T)
         self.W      += -f_eta*self.delta_W
 
         self.delta_b = self.E
         self.b      += -f_eta*self.delta_b
 
 class hiddenLayer(Layer):
-    def __init__(self, net, m, f_input_size):
-        Layer.__init__(self, net, m, f_input_size)
+    def __init__(self, net, m, f_input_size, b_input_size, use_h=False):
+        Layer.__init__(self, net, m, f_input_size, use_h=use_h)
 
-    def calc_error(self, W_above, E_above):
-        self.E = W_above.t().mm(E_above)*self.y*(1.0 - self.y)
+        self.a_backward = np.zeros((self.size, 1)).astype(np.float32)
+        self.a_forward  = np.zeros((self.size, 1)).astype(np.float32)
+        self.Y = Y_range[self.m]*np.random.uniform(-1, 1, size=(self.size, b_input_size)).astype(np.float32)
+
+        self.Y_2 = Y_2_range[self.m]*np.random.uniform(-1, 1, size=(self.size, self.net.n[-1])).astype(np.float32)
+
+        if use_sparse_feedback:
+            self.Y_dropout_indices = np.random.choice(len(self.Y.ravel()), int(0.5*len(self.Y.ravel())), False)
+            self.Y.ravel()[self.Y_dropout_indices] = 0
+
+        # self.Y_2_dropout_indices = np.random.choice(len(self.Y_2.ravel()), int(0.5*len(self.Y_2.ravel())), False)
+        # self.Y_2.ravel()[self.Y_2_dropout_indices] = 0
+
+        # remove_percent = 0.8
+        # self.Y_dropout_indices = torch.LongTensor([np.random.choice(self.size, int(remove_percent*self.size), False).tolist(), np.random.choice(b_input_size, int(remove_percent*self.size), True).tolist()])
+        # self.Y_dropout_values = torch.FloatTensor([1]*int(remove_percent*self.size))
+        # self.Y_mask = torch.sparse.FloatTensor(self.Y_dropout_indices, self.Y_dropout_values, torch.Size([self.size, b_input_size]))
+        # for i in range(self.size):
+        #     for j in range(b_input_size):
+        #         if np.random.uniform(0, 1) > 0.2:
+        #             self.Y_mask[i, j] = 0
+        # self.Y_mask = torch.from_numpy(self.Y_mask)
+        # self.Y.sparse_mask(self.Y_mask)
+        # self.Y *= 5
+
+        self.c = c_range[self.m]*np.ones((self.size, 1)).astype(np.float32)
+
+    def calc_error(self):
+        # self.a_forward  = self.net.l[self.m+1].W.t().mm(self.net.l[self.m+1].a_forward)
+        # self.a_backward = self.y_forward + torch.sigmoid(self.Y.mm(self.net.l[self.m+1].a_backward)) - torch.sigmoid(self.Y.mm(self.net.l[self.m+1].y_forward))
+
+        self.E = ((self.y_backward - self.y_forward))*-self.y_forward*(1.0 - self.y_forward)
+
+        self.loss = np.mean((self.y_backward - self.y_forward)**2)
+
+    def out(self, f_input, b_input):
+        Layer.out(self, f_input)
+
+        # self.b_input = b_input
+
+        # self.a_backward = torch.sigmoid(self.net.l[self.m+1].W.t().mm(self.net.l[self.m+1].a_backward))
+        if use_skip_connections:
+            self.y_backward = self.y_forward + np.tanh(np.dot(self.Y, (self.net.l[self.m+1].y_backward - self.net.l[self.m+1].y_forward))) + np.tanh(np.dot(self.Y_2, (self.net.l[-1].y_backward - self.net.l[-1].y_forward)))
+        else:
+            # self.y_backward = self.y_forward + np.tanh(np.dot(self.Y, (self.net.l[self.m+1].y_backward - self.net.l[self.m+1].y_forward)))
+            self.y_backward = self.y_forward + np.tanh(np.dot(self.Y_2, (self.net.l[-1].y_backward - self.net.l[-1].y_forward)))
+
+    def update_Y(self, b_eta):
+        pass
+        # a = torch.sigmoid(self.Y.mm(self.net.l[self.m+1].y_forward))
+        # self.E_inv = torch.sigmoid(self.Y.mm(self.net.l[self.m+1].y_backward) - self.Y.mm(self.net.l[self.m+1].y_forward))*(1.0 - torch.sigmoid(self.Y.mm(self.net.l[self.m+1].y_backward) - self.Y.mm(self.net.l[self.m+1].y_forward)))
+        # self.delta_Y = self.E_inv.mm((self.net.l[self.m+1].y_backward - self.net.l[self.m+1].y_forward).t())
+        # self.Y += np.random.normal(0, 0.001, size=self.Y.shape)
+        # self.Y_2 += np.random.normal(0, 0.001, size=self.Y_2.shape)
+
+        # self.Y[self.Y_dropout_indices_1, self.Y_dropout_indices_2] = 0
+        # self.Y.sparse_mask(self.Y_mask)
+        # self.Y *= 5
+
+        # self.delta_c = self.E_inv
+        # self.c      += -b_eta*self.delta_c
 
 class finalLayer(Layer):
-    def __init__(self, net, m, f_input_size):
-        Layer.__init__(self, net, m, f_input_size)
+    def __init__(self, net, m, f_input_size, use_h=False):
+        Layer.__init__(self, net, m, f_input_size, use_h=use_h)
 
-    def calc_error(self, t):
-        self.E = (t - self.y)*-self.y*(1.0 - self.y)
+    def calc_error(self):
+        self.E = (self.y_backward - self.y_forward)*-self.y_forward*(1.0 - self.y_forward)
+
+        self.loss = np.mean((self.y_backward - self.y_forward)**2)
+
+    def out(self, f_input, b_input):
+        Layer.out(self, f_input)
+
+        # self.a_forward = self.y_forward
+
+        # self.b_input = b_input
+
+
+        if b_input is not None:
+            self.y_backward = b_input
+            # self.a_backward = b_input
 
 # ---------------------------------------------------------------
 """                     Helper functions                      """
