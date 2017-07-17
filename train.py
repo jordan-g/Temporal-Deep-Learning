@@ -7,8 +7,8 @@ import matplotlib.pyplot as plt
 f_etas = [0.05, 0.05, 0.05, 0.05]
 b_etas = [0.1, 0.1, 0.1, 0.1]
 # b_etas = None
-n = [1000, 500, 200, network.n_out]
-n_epochs = 5
+n = [500, 200, network.n_out]
+n_epochs = 50
 
 n_trials = 1
 

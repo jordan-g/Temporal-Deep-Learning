@@ -473,6 +473,8 @@ class Layer:
 
         self.y_forward = sigmoid(np.dot(self.W, self.f_input) + self.b)
 
+        self.y_prev = self.y_forward.copy()
+
     def update_W(self, f_eta):
         self.delta_W = np.dot(self.E, self.f_input.T)
         self.W      += -f_eta*self.delta_W
