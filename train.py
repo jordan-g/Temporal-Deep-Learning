@@ -37,7 +37,7 @@ for i in range(n_trials):
     # c_list.append(torch.from_numpy(b_range[1]*np.ones((n[1], 1)).astype(np.float32)))
 
     # create the network -- this will also load the MNIST dataset files
-    net = network.Network(n=n, use_h=False)
+    net = network.Network(n=n)
 
     # net.set_weights(W_list, b_list, Y_list, c_list)
 

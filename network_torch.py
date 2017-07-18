@@ -35,40 +35,49 @@ sequence_length = 2000
 n_in            = 500
 n_out           = 3
 visualize_while_training = False
-use_skip_connections = False
-use_sparse_feedback = False
+use_sparse_feedback      = False
+n_spikes_per_burst = 5
 
-teach_prob = 0.2
-W_range = [0.5, 0.5, 0.5, 0.5, 0.5]
+teach_prob = 0.05
+W_range = [0.01, 0.01, 0.01, 0.01, 0.01]
 W_2_range = [0.5, 0.5]
 b_range = [0.1, 0.1, 0.1, 0.1, 0.1]
-Y_range = [1, 1, 1, 1]
-Y_2_range = [1, 1, 1]
+Y_range = [2, 2, 2, 2]
 c_range = [0.1, 0.1, 0.1, 0.1]
-
-x_set = np.zeros((n_in, sequence_length)).astype(np.float32)
-for i in range(n_in):
-    x = 2*(np.arange(sequence_length)/sequence_length - 0.5)*5
-    np.random.shuffle(x)
-    x_set[i] = x
-
-t_set = np.zeros((n_out, sequence_length)).astype(np.float32)
-for i in range(n_out):
-    x = np.arange(sequence_length)
-    t_set[i] = 0.2 + 0.5*(np.sin(np.random.uniform(0.01, 0.1)*x + np.random.uniform(0, 20)) + 1)*np.random.uniform(0.1, 0.3)
-    t_set[i] += 0.5*(np.cos(np.random.uniform(0.01, 0.05)*x + np.random.uniform(0, 20)) + 1)*np.random.uniform(0.1, 0.3)
-
-# np.save("x_set.npy", x_set)
-# np.save("t_set.npy", t_set)
-
-x_set = np.load("x_set.npy")
-t_set = np.load("t_set.npy")
 
 colors = ["red", "blue", "green", "yellow", "brown", "purple", "white", "cyan", "orange", "magenta"][:n_out]
 
 # ---------------------------------------------------------------
 """                     Functions                             """
 # ---------------------------------------------------------------
+
+def create_data():
+    x_set = np.zeros((n_in, sequence_length)).astype(np.float32)
+    for i in range(n_in):
+        # x = 2*(np.arange(sequence_length)/sequence_length - 0.5)*5
+        # np.random.shuffle(x)
+        # x_set[i] = x
+
+        x = np.arange(sequence_length)
+        x_set[i] = 0.2 + 0.5*(np.sin(np.random.uniform(0.01, 0.04)*x + np.random.uniform(0, 20)) + 1)*np.random.uniform(0.1, 0.3)
+        x_set[i] += 0.5*(np.cos(np.random.uniform(0.01, 0.05)*x + np.random.uniform(0, 20)) + 1)*np.random.uniform(0.1, 0.3)
+
+    t_set = np.zeros((n_out, sequence_length)).astype(np.float32)
+    for i in range(n_out):
+        x = np.arange(sequence_length)
+        t_set[i] = 0.2 + 0.5*(np.sin(np.random.uniform(0.01, 0.04)*x + np.random.uniform(0, 20)) + 1)*np.random.uniform(0.1, 0.3)
+        t_set[i] += 0.5*(np.cos(np.random.uniform(0.01, 0.05)*x + np.random.uniform(0, 20)) + 1)*np.random.uniform(0.1, 0.3)
+
+    np.save("x_set.npy", x_set)
+    np.save("t_set.npy", t_set)
+
+    return x_set, t_set
+
+def load_data():
+    x_set = np.load("x_set.npy")
+    t_set = np.load("t_set.npy")
+
+    return x_set, t_set
 
 def get_x(n):
     return x_set[:, n][:, np.newaxis]
@@ -83,8 +92,10 @@ def sigmoid(x):
 """                     Network class                         """
 # ---------------------------------------------------------------
 
+x_set, t_set = load_data()
+
 class Network:
-    def __init__(self, n, use_h=False):
+    def __init__(self, n):
         '''
         Initialize the network. Note: This also loads the MNIST dataset.
 
@@ -99,18 +110,16 @@ class Network:
         self.M = len(self.n) # number of layers
 
         self.n_in  = get_x(0).shape[0] # input size
-        self.n_out = self.n[-1]      # output size
-
-        self.use_h = use_h
+        self.n_out = self.n[-1]        # output size
 
         self.current_epoch = None # current epoch of simulation
 
         print("Creating network with {} layers.".format(self.M))
         print("--------------------------------")
 
-        self.init_layers(use_h=use_h)
+        self.init_layers()
 
-    def init_layers(self, use_h=False):
+    def init_layers(self):
         '''
         Create the layers of the network.
         '''
@@ -120,47 +129,44 @@ class Network:
 
         # create all layers
         if self.M == 1:
-            self.l.append(finalLayer(net=self, m=-1, f_input_size=self.n_in, use_h=use_h))
+            self.l.append(finalLayer(net=self, m=-1, f_input_size=self.n_in))
         else:
-            self.l.append(hiddenLayer(net=self, m=0, f_input_size=self.n_in, b_input_size=self.n[1], use_h=use_h))
+            self.l.append(hiddenLayer(net=self, m=0, f_input_size=self.n_in, b_input_size=self.n[1]))
             for m in xrange(1, self.M-1):
-                self.l.append(hiddenLayer(net=self, m=m, f_input_size=self.n[m-1], b_input_size=self.n[m+1], use_h=use_h))
-            self.l.append(finalLayer(net=self, m=self.M-1, f_input_size=self.n[-2], use_h=use_h))
+                self.l.append(hiddenLayer(net=self, m=m, f_input_size=self.n[m-1], b_input_size=self.n[m+1]))
+            self.l.append(finalLayer(net=self, m=self.M-1, f_input_size=self.n[-2]))
 
-    def out(self, x, t):
+    def out(self, x, t, time):
         '''
         Perform a pass through the network and update weights.
         '''
 
         if self.M == 1:
-            self.l[0].out(x, t)
+            self.l[0].update_B(x)
+            if time >= 1:
+                self.l[0].update_V(t)
+                self.l[0].burst(self.f_etas[0])
         else:
-            self.l[0].out(x, self.l[1].y_backward)
+            for m in xrange(self.M):
+                if m == 0:
+                    self.l[m].update_B(x)
+                elif time >= m:
+                    self.l[m].update_B(self.l[m-1].event_rate)
 
-            for m in xrange(1, self.M-1):
-                self.l[m].out(self.l[m-1].y_forward, self.l[m+1].y_backward)
+            for m in xrange(self.M):
+                if time >= m+1:
+                    if m == self.M-1:
+                        self.l[m].update_V(t)
+                    else:
+                        self.l[m].update_V()
 
-            self.l[-1].out(self.l[-2].y_forward, t)
+            for m in xrange(self.M):
+                if time >= self.M:
+                    if m != self.M-1:
+                        self.l[m].update_A(self.l[-1].event_rate)
 
-            for m in xrange(self.M-2, 0, -1):
-                self.l[m].out(self.l[m-1].y_forward, self.l[m+1].y_backward)
-
-            self.l[0].out(x, self.l[1].y_backward)
-
-        if t is not None:
-            for m in xrange(self.M-1, -1, -1): # for the hidden layers:
-                # update weights
-                self.l[m].calc_error()
-
-            # update feedforward weights for the final layer
-            self.l[-1].update_W(self.f_etas[-1])
-
-            for m in xrange(self.M-2, -1, -1): # for the hidden layers:
-                # update weights
-                self.l[m].update_W(self.f_etas[m])
-        # else:
-            for m in xrange(self.M-2, -1, -1): # for the hidden layers:
-                self.l[m].update_Y(self.b_etas[m])
+                    if t is not None:
+                        self.l[m].burst(self.f_etas[m])
 
     def train(self, f_etas, b_etas, n_epochs, save_simulation, simulations_folder=default_simulations_folder, folder_name="", overwrite=False, simulation_notes=None, current_epoch=None, plot=False):
         print("Starting training.\n")
@@ -181,7 +187,7 @@ class Network:
             sim_start_time = datetime.datetime.now()
 
             if folder_name == "":
-                self.simulation_path = os.path.join(simulations_folder, "{}.{}.{}-{}.{}".format(sim_start_time.year,
+                self.simulation_path = os.path.join(simulations_folder, "{}.{}.{}-{}.{}".format(sim_start_time.event_rateear,
                                                                                  sim_start_time.month,
                                                                                  sim_start_time.day,
                                                                                  sim_start_time.hour,
@@ -217,7 +223,7 @@ class Network:
             # save simulation params
             if not continuing:
                 with open(os.path.join(self.simulation_path, 'simulation.txt'), 'w') as simulation_file:
-                    print("Simulation done on {}.{}.{}-{}.{}.".format(sim_start_time.year,
+                    print("Simulation done on {}.{}.{}-{}.{}.".format(sim_start_time.event_rateear,
                                                                      sim_start_time.month,
                                                                      sim_start_time.day,
                                                                      sim_start_time.hour,
@@ -246,7 +252,7 @@ class Network:
         # start time used for timing how long each 1000 examples take
         start_time = None
 
-        avg_loss = 0
+        avg_loss   = 0
         no_t_count = 0
 
         if plot:
@@ -283,13 +289,8 @@ class Network:
                 if start_time == None:
                     start_time = time.time()
 
-                # print every 100 examples
-                # if (n+1) % 100 == 0:
-                #     sys.stdout.write("\x1b[2K\rEpoch {0}, example {1}/{2}. ".format(self.current_epoch + 1, n+1, sequence_length))
-                #     sys.stdout.flush()
-
-                self.x = get_x(n)
-                self.t = get_t(n)
+                self.x = torch.from_numpy(get_x(n))
+                self.t = torch.from_numpy(get_t(n))
 
                 # self.x, self.t = next(iter(train_loader))
 
@@ -304,29 +305,24 @@ class Network:
                     t    = None
                     no_t_count += 1
 
-                # if k == n_epochs - 1 and n > 0:
-                #     self.x *= 0
-
                 # do a pass through the network & update weights
-                self.out(self.x, t)
-
-                # t_2 = self.t
+                self.out(self.x, t, n)
 
                 if not no_t:
                     for m in xrange(self.M):
-                        avg_losses[m, counter] += self.l[m].loss
+                        avg_losses[m, counter] += float(self.l[m].loss)
 
                     # if self.l[-1].loss > 0.002:
                     #     show_target = True
 
                 # avg_loss += self.l[-1].loss
 
-                self.targets[k*sequence_length + n] = self.t[:, 0]
-                self.outputs[k*sequence_length + n] = self.l[-1].y_forward[:, 0]
+                self.targets[k*sequence_length + n] = self.t.numpy()[:, 0]
+                self.outputs[k*sequence_length + n] = self.l[-1].event_rates_prev[-1].numpy()[:, 0]
 
                 if visualize_while_training and (not no_t) and plot:
                     for l in xrange(self.n_out):
-                        scatter_point = self.animation_axis.scatter(n, self.l[-1].y_forward[l], c=colors[l], s=10)
+                        scatter_point = self.animation_axis.scatter(k*sequence_length + n, self.l[-1].event_rate.numpy()[l, 0], c=colors[l], s=10)
                         scatter_points.append(scatter_point)
 
                 if (n+1) % 100 == 0:
@@ -338,7 +334,6 @@ class Network:
                 if (n+1) % 1000 == 0:
                     # if n != sequence_length - 1:
                     #     sys.stdout.write("\x1b[2K\rEpoch {0}, example {1}/{2}. ".format(self.current_epoch + 1, n+1, sequence_length))
-
                     print("Epoch {}, t={}. Average loss: {}. ".format(self.current_epoch + 1, n+1, avg_losses[-1, counter-1]))
 
                     no_t_count = 0
@@ -351,15 +346,15 @@ class Network:
 
             if visualize_while_training and plot:
                 for l in xrange(self.n_out):
-                    min_x = max(0, k*sequence_length-1000)
-                    max_x = k*n_epochs
+                    min_x = max(0, (k+1)*sequence_length-2000)
+                    max_x = (k+1)*sequence_length
                     self.target_lines[l].set_data(np.arange(min_x, max_x), self.targets[min_x:max_x, l])
                     self.output_lines[l].set_data(np.arange(min_x, max_x), self.outputs[min_x:max_x, l])
 
                     self.animation_axis.relim()
                     self.animation_axis.autoscale_view(scalex=True, scaley=True)
 
-                    self.loss_line.set_data(range(len(avg_losses)), avg_losses)
+                    self.loss_line.set_data(range(counter), avg_losses[-1, :counter])
                     self.animation_axis_2.relim()
                     self.animation_axis_2.autoscale_view(scalex=True, scaley=True)
 
@@ -451,123 +446,130 @@ class Network:
 # ---------------------------------------------------------------
 
 class Layer:
-    def __init__(self, net, m, f_input_size, use_h=False):
+    def __init__(self, net, m, f_input_size):
         self.net      = net
         self.m        = m
         self.size     = self.net.n[m]
-        self.y_forward  = np.zeros((self.size, 1))
-        self.y_backward = np.zeros((self.size, 1))
-        self.E = np.zeros((self.size, 1))
-        self.y_prev   = np.zeros((self.size, 1))
-        self.t        = np.zeros((self.size, 1))
-        self.t_prev   = np.zeros((self.size, 1))
-        self.f_input  = np.zeros((f_input_size, 1))
-        self.b_input  = np.zeros((self.size, 1))
-        self.b_input_old = np.zeros((self.size, 1))
 
-        self.W = W_range[self.m]*np.random.uniform(-1, 1, size=(self.size, f_input_size))
-        self.b = b_range[self.m]*np.ones((self.size, 1))
+        self.f_input = torch.from_numpy(np.zeros((f_input_size, 1)).astype(np.float32))
+        self.f_inputs_prev = [ torch.from_numpy(np.zeros((f_input_size, 1)).astype(np.float32)) for i in range(10) ]
+        self.event_rates_prev = [ torch.from_numpy(np.zeros((self.size, 1)).astype(np.float32)) for i in range(10) ]
 
-    def out(self, f_input):
-        self.f_input = f_input
+        self.B  = torch.from_numpy(np.zeros((self.size, 1)).astype(np.float32))
+        self.V  = torch.from_numpy(np.zeros((self.size, 1)).astype(np.float32))
+        self.event_rate  = torch.from_numpy(np.zeros((self.size, 1)).astype(np.float32))
+        self.spike_rate  = torch.from_numpy(np.zeros((self.size, 1)).astype(np.float32))
+        self.burst_rate  = torch.from_numpy(np.zeros((self.size, 1)).astype(np.float32))
 
-        self.y_forward = sigmoid(np.dot(self.W, self.f_input) + self.b)
+        self.E = torch.from_numpy(np.zeros((self.size, 1)).astype(np.float32))
+        self.t        = torch.from_numpy(np.zeros((self.size, 1)).astype(np.float32))
+        self.loss = 0
 
-        self.y_prev = self.y_forward.copy()
+        self.b_input  = torch.from_numpy(np.zeros((self.size, 1)).astype(np.float32))
+
+        self.W = torch.from_numpy(W_range[self.m]*np.random.uniform(0, 1, size=(self.size, f_input_size)).astype(np.float32))
+        self.b = torch.from_numpy(b_range[self.m]*np.ones((self.size, 1)).astype(np.float32))
+
+        self.delta_W = torch.from_numpy(np.zeros(self.W.size()).astype(np.float32))
+        self.delta_b = torch.from_numpy(np.zeros(self.b.size()).astype(np.float32))
+
+    def update_B(self, f_input):
+        del self.f_inputs_prev[0]
+        self.f_inputs_prev.append(self.f_input.clone())
+
+        self.f_input = f_input.clone()
+
+        self.B = self.W.mm(self.f_input) + self.b
+
+    def update_V(self):
+        self.V = self.B.clone()
+
+        del self.event_rates_prev[0]
+        self.event_rates_prev.append(self.event_rate.clone())
+
+        self.event_rate = torch.sigmoid(self.V)
 
     def update_W(self, f_eta):
-        self.delta_W = np.dot(self.E, self.f_input.T)
-        self.W      += -f_eta*self.delta_W
+        self.E[torch.abs(self.burst_rate) < 0.4] = 0
+        self.delta_W = self.E.mm(self.f_inputs_prev[-1].t())
+
+        self.W      += -f_eta*self.delta_W - 0.00001*self.W
 
         self.delta_b = self.E
         self.b      += -f_eta*self.delta_b
 
+    def decay_W(self):
+        pass
+        self.W      -= 0.00001*self.W
+
 class hiddenLayer(Layer):
-    def __init__(self, net, m, f_input_size, b_input_size, use_h=False):
-        Layer.__init__(self, net, m, f_input_size, use_h=use_h)
+    def __init__(self, net, m, f_input_size, b_input_size):
+        Layer.__init__(self, net, m, f_input_size)
 
-        self.a_backward = np.zeros((self.size, 1)).astype(np.float32)
-        self.a_forward  = np.zeros((self.size, 1)).astype(np.float32)
-        self.Y = Y_range[self.m]*np.random.uniform(-1, 1, size=(self.size, b_input_size)).astype(np.float32)
-
-        self.Y_2 = Y_2_range[self.m]*np.random.uniform(-1, 1, size=(self.size, self.net.n[-1])).astype(np.float32)
+        self.Y = Y_range[self.m]*np.random.uniform(-1, 1, size=(self.size, self.net.n[-1])).astype(np.float32)
+        self.c = c_range[self.m]*np.random.uniform(-1, 1, size=(self.size, 1)).astype(np.float32)
 
         if use_sparse_feedback:
             self.Y_dropout_indices = np.random.choice(len(self.Y.ravel()), int(0.5*len(self.Y.ravel())), False)
             self.Y.ravel()[self.Y_dropout_indices] = 0
 
-        # self.Y_2_dropout_indices = np.random.choice(len(self.Y_2.ravel()), int(0.5*len(self.Y_2.ravel())), False)
-        # self.Y_2.ravel()[self.Y_2_dropout_indices] = 0
+        self.Y = torch.from_numpy(self.Y)
+        self.c = torch.from_numpy(self.c)
 
-        # remove_percent = 0.8
-        # self.Y_dropout_indices = torch.LongTensor([np.random.choice(self.size, int(remove_percent*self.size), False).tolist(), np.random.choice(b_input_size, int(remove_percent*self.size), True).tolist()])
-        # self.Y_dropout_values = torch.FloatTensor([1]*int(remove_percent*self.size))
-        # self.Y_mask = torch.sparse.FloatTensor(self.Y_dropout_indices, self.Y_dropout_values, torch.Size([self.size, b_input_size]))
-        # for i in range(self.size):
-        #     for j in range(b_input_size):
-        #         if np.random.uniform(0, 1) > 0.2:
-        #             self.Y_mask[i, j] = 0
-        # self.Y_mask = torch.from_numpy(self.Y_mask)
-        # self.Y.sparse_mask(self.Y_mask)
-        # self.Y *= 5
+        self.A  = torch.from_numpy(np.zeros((self.size, 1)).astype(np.float32))
+        self.A_prev  = torch.from_numpy(np.zeros((self.size, 1)).astype(np.float32))
 
-        self.c = c_range[self.m]*np.ones((self.size, 1)).astype(np.float32)
+    def update_A(self, b_input):
+        self.b_input = b_input.clone()
 
-    def calc_error(self):
-        # self.a_forward  = self.net.l[self.m+1].W.t().mm(self.net.l[self.m+1].a_forward)
-        # self.a_backward = self.y_forward + torch.sigmoid(self.Y.mm(self.net.l[self.m+1].a_backward)) - torch.sigmoid(self.Y.mm(self.net.l[self.m+1].y_forward))
+        self.A_prev = self.A.clone()
 
-        self.E = ((self.y_backward - self.y_forward))*-self.y_forward*(1.0 - self.y_forward)
+        self.A = self.Y.mm(self.b_input)
 
-        self.loss = np.mean((self.y_backward - self.y_forward)**2)
+    def update_V(self):
+        Layer.update_V(self)
 
-    def out(self, f_input, b_input):
-        Layer.out(self, f_input)
+        self.spike_rate = (1.0 - self.burst_rate)*self.event_rate + self.burst_rate*self.event_rate*n_spikes_per_burst
 
-        # self.b_input = b_input
+    def burst(self, f_eta):
+        self.burst_rate = torch.sigmoid(self.A - self.A_prev)
 
-        # self.a_backward = torch.sigmoid(self.net.l[self.m+1].W.t().mm(self.net.l[self.m+1].a_backward))
-        if use_skip_connections:
-            self.y_backward = self.y_forward + np.tanh(np.dot(self.Y, (self.net.l[self.m+1].y_backward - self.net.l[self.m+1].y_forward))) + np.tanh(np.dot(self.Y_2, (self.net.l[-1].y_backward - self.net.l[-1].y_forward)))
-        else:
-            # self.y_backward = self.y_forward + np.tanh(np.dot(self.Y, (self.net.l[self.m+1].y_backward - self.net.l[self.m+1].y_forward)))
-            self.y_backward = self.y_forward + np.tanh(np.dot(self.Y_2, (self.net.l[-1].y_backward - self.net.l[-1].y_forward)))
+        self.E = (2*self.burst_rate - 1)*-self.event_rates_prev[-1]*(1.0 - self.event_rates_prev[-1])
+
+        self.loss = torch.mean((2*self.burst_rate - 1)**2)
+
+        self.update_W(f_eta)
 
     def update_Y(self, b_eta):
         pass
-        # a = torch.sigmoid(self.Y.mm(self.net.l[self.m+1].y_forward))
-        # self.E_inv = torch.sigmoid(self.Y.mm(self.net.l[self.m+1].y_backward) - self.Y.mm(self.net.l[self.m+1].y_forward))*(1.0 - torch.sigmoid(self.Y.mm(self.net.l[self.m+1].y_backward) - self.Y.mm(self.net.l[self.m+1].y_forward)))
-        # self.delta_Y = self.E_inv.mm((self.net.l[self.m+1].y_backward - self.net.l[self.m+1].y_forward).t())
-        # self.Y += np.random.normal(0, 0.001, size=self.Y.shape)
-        # self.Y_2 += np.random.normal(0, 0.001, size=self.Y_2.shape)
-
-        # self.Y[self.Y_dropout_indices_1, self.Y_dropout_indices_2] = 0
-        # self.Y.sparse_mask(self.Y_mask)
-        # self.Y *= 5
-
-        # self.delta_c = self.E_inv
-        # self.c      += -b_eta*self.delta_c
+        # self.Y -= 0.001
+        # self.Y += torch.from_numpy(np.random.normal(0, 1, size=self.Y.size()).astype(np.float32))
+        # self.Y += np.random.normal(0, 0.001, size=self.Y.size())
 
 class finalLayer(Layer):
-    def __init__(self, net, m, f_input_size, use_h=False):
-        Layer.__init__(self, net, m, f_input_size, use_h=use_h)
+    def __init__(self, net, m, f_input_size):
+        Layer.__init__(self, net, m, f_input_size)
 
-    def calc_error(self):
-        self.E = (self.y_backward - self.y_forward)*-self.y_forward*(1.0 - self.y_forward)
+    def burst(self, f_eta):
+        self.burst_rate = torch.sigmoid(self.event_rate - self.event_rates_prev[-1])
 
-        self.loss = np.mean((self.y_backward - self.y_forward)**2)
+        self.E = (self.event_rate - self.event_rates_prev[-1])*-self.event_rates_prev[-1]*(1.0 - self.event_rates_prev[-1])
 
-    def out(self, f_input, b_input):
-        Layer.out(self, f_input)
+        self.loss = torch.mean((self.b_input - self.event_rates_prev[-1])**2)
 
-        # self.a_forward = self.y_forward
+        self.update_W(f_eta)
 
-        # self.b_input = b_input
-
+    def update_V(self, b_input=None):
+        Layer.update_V(self)
 
         if b_input is not None:
-            self.y_backward = b_input
-            # self.a_backward = b_input
+            self.b_input = b_input.clone()
+
+            self.event_rate = 0.5*self.event_rate + 0.5*b_input.clone()
+
+            # print("hey", self.event_rate)
+
+        self.spike_rate = self.event_rate
 
 # ---------------------------------------------------------------
 """                     Helper functions                      """
