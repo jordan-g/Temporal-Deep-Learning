@@ -71,19 +71,19 @@ def create_data():
     np.save("x_set.npy", x_set)
     np.save("t_set.npy", t_set)
 
-    return x_set, t_set
+    return torch.from_numpy(x_set), torch.from_numpy(t_set)
 
 def load_data():
     x_set = np.load("x_set.npy")
     t_set = np.load("t_set.npy")
 
-    return x_set, t_set
+    return torch.from_numpy(x_set), torch.from_numpy(t_set)
 
 def get_x(n):
-    return x_set[:, n][:, np.newaxis]
+    return x_set[:, n].unsqueeze_(1)
 
 def get_t(n):
-    return t_set[:, n][:, np.newaxis]
+    return t_set[:, n].unsqueeze_(1)
 
 def sigmoid(x):
     return expit(x)
@@ -109,7 +109,7 @@ class Network:
         self.n = n           # layer sizes - eg. (500, 100, 10)
         self.M = len(self.n) # number of layers
 
-        self.n_in  = get_x(0).shape[0] # input size
+        self.n_in  = get_x(0).size()[0] # input size
         self.n_out = self.n[-1]        # output size
 
         self.current_epoch = None # current epoch of simulation
@@ -289,8 +289,8 @@ class Network:
                 if start_time == None:
                     start_time = time.time()
 
-                self.x = torch.from_numpy(get_x(n))
-                self.t = torch.from_numpy(get_t(n))
+                self.x = get_x(n)
+                self.t = get_t(n)
 
                 # self.x, self.t = next(iter(train_loader))
 
