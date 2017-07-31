@@ -40,7 +40,6 @@ n_spikes_per_burst = 5
 
 teach_prob = 0.05
 W_range = [0.01, 0.01, 0.01, 0.01, 0.01]
-W_2_range = [0.5, 0.5]
 b_range = [0.1, 0.1, 0.1, 0.1, 0.1]
 Y_range = [2, 2, 2, 2]
 c_range = [0.1, 0.1, 0.1, 0.1]
@@ -136,37 +135,37 @@ class Network:
                 self.l.append(hiddenLayer(net=self, m=m, f_input_size=self.n[m-1], b_input_size=self.n[m+1]))
             self.l.append(finalLayer(net=self, m=self.M-1, f_input_size=self.n[-2]))
 
-    def out(self, x, t, time):
+    def out(self, x, t, prev_t, time):
         '''
         Perform a pass through the network and update weights.
         '''
 
         if self.M == 1:
-            self.l[0].update_B(x)
             if time >= 1:
-                self.l[0].update_V(t)
+                self.l[0].update_activity(x, t)
+
+            if t is not None:
                 self.l[0].burst(self.f_etas[0])
         else:
-            for m in xrange(self.M):
-                if m == 0:
-                    self.l[m].update_B(x)
-                elif time >= m:
-                    self.l[m].update_B(self.l[m-1].event_rate)
+            if time >= self.M:
+                self.l[-1].update_activity(self.l[-2].event_rate, t)
 
-            for m in xrange(self.M):
+            for m in xrange(self.M-2, -1, -1):
                 if time >= m+1:
-                    if m == self.M-1:
-                        self.l[m].update_V(t)
+                    if m == 0:
+                        self.l[0].update_f_input(x)
                     else:
-                        self.l[m].update_V()
+                        self.l[m].update_f_input(self.l[m-1].event_rate)
 
-            for m in xrange(self.M):
-                if time >= self.M:
-                    if m != self.M-1:
-                        self.l[m].update_A(self.l[-1].event_rate)
+            for m in xrange(self.M-1):
+                if time > self.M+1:
+                    self.l[m].update_b_input(self.l[-1].event_rate)
 
-                    if t is not None:
+                    if prev_t is not None:
                         self.l[m].burst(self.f_etas[m])
+
+            if t is not None:
+                self.l[-1].burst(self.f_etas[-1])
 
     def train(self, f_etas, b_etas, n_epochs, save_simulation, simulations_folder=default_simulations_folder, folder_name="", overwrite=False, simulation_notes=None, current_epoch=None, plot=False):
         print("Starting training.\n")
@@ -280,6 +279,8 @@ class Network:
 
         show_target = False
 
+        t = None
+
         for k in xrange(n_epochs):
             self.targets *= 0
             self.outputs *= 0
@@ -288,6 +289,11 @@ class Network:
                 # set start time
                 if start_time == None:
                     start_time = time.time()
+
+                if t is not None:
+                    prev_t = t.clone()
+                else:
+                    prev_t = None
 
                 self.x = get_x(n)
                 self.t = get_t(n)
@@ -306,7 +312,7 @@ class Network:
                     no_t_count += 1
 
                 # do a pass through the network & update weights
-                self.out(self.x, t, n)
+                self.out(self.x, t, prev_t, n)
 
                 if not no_t:
                     for m in xrange(self.M):
@@ -455,14 +461,13 @@ class Layer:
         self.f_inputs_prev = [ torch.from_numpy(np.zeros((f_input_size, 1)).astype(np.float32)) for i in range(10) ]
         self.event_rates_prev = [ torch.from_numpy(np.zeros((self.size, 1)).astype(np.float32)) for i in range(10) ]
 
-        self.B  = torch.from_numpy(np.zeros((self.size, 1)).astype(np.float32))
-        self.V  = torch.from_numpy(np.zeros((self.size, 1)).astype(np.float32))
+        self.y_pre  = torch.from_numpy(np.zeros((self.size, 1)).astype(np.float32))
         self.event_rate  = torch.from_numpy(np.zeros((self.size, 1)).astype(np.float32))
         self.spike_rate  = torch.from_numpy(np.zeros((self.size, 1)).astype(np.float32))
         self.burst_rate  = torch.from_numpy(np.zeros((self.size, 1)).astype(np.float32))
 
         self.E = torch.from_numpy(np.zeros((self.size, 1)).astype(np.float32))
-        self.t        = torch.from_numpy(np.zeros((self.size, 1)).astype(np.float32))
+        self.t = torch.from_numpy(np.zeros((self.size, 1)).astype(np.float32))
         self.loss = 0
 
         self.b_input  = torch.from_numpy(np.zeros((self.size, 1)).astype(np.float32))
@@ -473,27 +478,23 @@ class Layer:
         self.delta_W = torch.from_numpy(np.zeros(self.W.size()).astype(np.float32))
         self.delta_b = torch.from_numpy(np.zeros(self.b.size()).astype(np.float32))
 
-    def update_B(self, f_input):
+    def update_f_input(self, f_input):
         del self.f_inputs_prev[0]
         self.f_inputs_prev.append(self.f_input.clone())
 
         self.f_input = f_input.clone()
 
-        self.B = self.W.mm(self.f_input) + self.b
-
-    def update_V(self):
-        self.V = self.B.clone()
+        self.y_pre = self.W.mm(self.f_input) + self.b
 
         del self.event_rates_prev[0]
         self.event_rates_prev.append(self.event_rate.clone())
 
-        self.event_rate = torch.sigmoid(self.V)
+        self.event_rate = torch.sigmoid(self.y_pre)
 
     def update_W(self, f_eta):
-        self.E[torch.abs(self.burst_rate) < 0.4] = 0
-        self.delta_W = self.E.mm(self.f_inputs_prev[-1].t())
+        self.delta_W = self.E.mm(self.f_input.t())
 
-        self.W      += -f_eta*self.delta_W - 0.00001*self.W
+        self.W      += -f_eta*self.delta_W
 
         self.delta_b = self.E
         self.b      += -f_eta*self.delta_b
@@ -516,23 +517,23 @@ class hiddenLayer(Layer):
         self.Y = torch.from_numpy(self.Y)
         self.c = torch.from_numpy(self.c)
 
-        self.A  = torch.from_numpy(np.zeros((self.size, 1)).astype(np.float32))
-        self.A_prev  = torch.from_numpy(np.zeros((self.size, 1)).astype(np.float32))
+        self.g  = torch.from_numpy(np.zeros((self.size, 1)).astype(np.float32))
+        self.g_prev  = torch.from_numpy(np.zeros((self.size, 1)).astype(np.float32))
 
-    def update_A(self, b_input):
+    def update_b_input(self, b_input):
         self.b_input = b_input.clone()
 
-        self.A_prev = self.A.clone()
+        self.g_prev = self.g.clone()
 
-        self.A = self.Y.mm(self.b_input)
+        self.g = self.Y.mm(self.b_input)
 
-    def update_V(self):
-        Layer.update_V(self)
+    def update_f_input(self, f_input):
+        Layer.update_f_input(self, f_input)
 
         self.spike_rate = (1.0 - self.burst_rate)*self.event_rate + self.burst_rate*self.event_rate*n_spikes_per_burst
 
     def burst(self, f_eta):
-        self.burst_rate = torch.sigmoid(self.A - self.A_prev)
+        self.burst_rate = torch.sigmoid(self.g - self.g_prev)
 
         self.E = (2*self.burst_rate - 1)*-self.event_rates_prev[-1]*(1.0 - self.event_rates_prev[-1])
 
@@ -559,15 +560,13 @@ class finalLayer(Layer):
 
         self.update_W(f_eta)
 
-    def update_V(self, b_input=None):
-        Layer.update_V(self)
-
+    def update_activity(self, f_input, b_input=None):
         if b_input is not None:
             self.b_input = b_input.clone()
 
             self.event_rate = 0.5*self.event_rate + 0.5*b_input.clone()
-
-            # print("hey", self.event_rate)
+        else:
+            Layer.update_f_input(self, f_input)
 
         self.spike_rate = self.event_rate
 
