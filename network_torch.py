@@ -126,7 +126,7 @@ class Network:
             self.l.append(finalLayer(net=self, m=0, f_input_size=self.n[0]))
         else:
             for m in xrange(1, self.M):
-                self.l.append(hiddenLayer(net=self, m=m-1, f_input_size=self.n[m-1], b_input_size=self.n[m+1]))
+                self.l.append(hiddenLayer(net=self, m=m-1, f_input_size=self.n[m-1], b_input_size=self.n[-1]))
             self.l.append(finalLayer(net=self, m=self.M-1, f_input_size=self.n[-2]))
 
     def out(self, x, t, prev_t, time):
@@ -416,8 +416,6 @@ class Layer:
         self.event_rate       = torch.from_numpy(np.zeros((self.size, 1)).astype(np.float32))
         self.event_rates_prev = [ torch.from_numpy(np.zeros((self.size, 1)).astype(np.float32)) for i in range(10) ]
 
-        self.b_input  = torch.from_numpy(np.zeros((self.size, 1)).astype(np.float32))
-
         self.E = torch.from_numpy(np.zeros((self.size, 1)).astype(np.float32))
 
         self.loss = 0
@@ -434,7 +432,7 @@ class Layer:
         self.f_inputs_prev.append(self.f_input.clone())
 
         # update feedforward input
-        self.f_input = f_input.clone()
+        self.f_input = (self.f_input + f_input.clone())/2.0
 
         # calculate pre-nonlinearity activity
         self.y_pre = self.W.mm(self.f_input) + self.b
@@ -472,6 +470,8 @@ class hiddenLayer(Layer):
 
         Layer.__init__(self, net, m, f_input_size)
 
+        self.b_input  = torch.from_numpy(np.zeros((b_input_size, 1)).astype(np.float32))
+
         # create feedback weights
         self.Y = Y_range*np.random.uniform(-1, 1, size=(self.size, self.net.n[-1])).astype(np.float32)
 
@@ -486,7 +486,7 @@ class hiddenLayer(Layer):
         self.g_prev  = torch.from_numpy(np.zeros((self.size, 1)).astype(np.float32))
 
     def update_b_input(self, b_input):
-        self.b_input = b_input.clone()
+        self.b_input = (self.b_input + b_input.clone())/2.0
 
         self.g_prev = self.g.clone()
 
@@ -502,7 +502,7 @@ class hiddenLayer(Layer):
 
         self.E = (2*self.burst_rate - 1)*-self.event_rates_prev[-1]*(1.0 - self.event_rates_prev[-1])
 
-        self.E_inv = (self.g - self.g_prev)
+        self.E_inv = (self.g - self.g_prev)*-1
 
         self.loss = torch.mean((2*self.burst_rate - 1)**2)
 
@@ -533,6 +533,8 @@ class finalLayer(Layer):
     def __init__(self, net, m, f_input_size):
         Layer.__init__(self, net, m, f_input_size)
 
+        self.b_input  = torch.from_numpy(np.zeros((self.size, 1)).astype(np.float32))
+
     def burst(self, f_eta):
         self.burst_rate = torch.sigmoid(self.event_rate - self.event_rates_prev[-1])
 
@@ -550,6 +552,6 @@ class finalLayer(Layer):
         if b_input is not None:
             self.b_input = b_input.clone()
 
-            self.event_rate = 0.5*self.event_rate + 0.5*b_input.clone()
+            self.event_rate = self.b_input.clone()
 
         self.spike_rate = self.event_rate

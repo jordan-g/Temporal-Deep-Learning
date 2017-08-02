@@ -5,11 +5,11 @@ import matplotlib.pyplot as plt
 
 # set training parameters
 f_etas = [0.1, 0.1, 0.1, 0.1]
-b_etas = [0.1, 0.1, 0.1, 0.1]
+b_etas = [1, 1, 1, 1]
 
 n = [500, 300, 200, 100, 3]
 
-n_epochs      = 100
+n_epochs      = 50
 n_trials      = 1
 plot_activity = True
 weight_decay  = 0.0001
