@@ -277,13 +277,12 @@ class Network:
                     # minus those where a target wasn't present
                     if 100 - no_t_count > 0:
                         avg_losses[:, counter] /= (100 - no_t_count)
+                        print("Epoch {:>3d}, t={:>4d}. Average loss: {:.10f}.".format(k+1, time+1, avg_losses[-1, counter]))
+                    else:
+                        print("Epoch {:>3d}, t={:>4d}. Average loss: {}.".format(k+1, time+1, "_"*12))
+                        
                     no_t_count = 0
                     counter += 1
-
-                if (time+1) % 100 == 0 and k < n_epochs-int(plot_activity):
-                    print("Epoch {:>3d}, t={:>4d}. Average loss: {:.10f}.".format(k+1, time+1, avg_losses[-1, counter-1]))
-
-                    no_t_count = 0
 
             if visualize_while_training and plot_activity:
                 # update plot
