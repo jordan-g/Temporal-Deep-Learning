@@ -29,28 +29,28 @@ if sys.version_info >= (3,):
 # ---------------------------------------------------------------
 
 default_simulations_folder = 'Simulations/' # folder in which to save simulations (edit accordingly)
-weight_cmap                = 'bone'         # color map to use for weight plotting
 
-sequence_length = 2000
-n_in            = 500
-n_out           = 3
-visualize_while_training = False
-use_sparse_feedback      = False
-n_spikes_per_burst = 5
+sequence_length    = 2000 # length of the input sequence to be repeated
+n_spikes_per_burst = 10   # number of spikes in each burst
+teach_prob         = 0.05 # probability of a teaching signal being provided
 
-teach_prob = 0.05
-W_range = [0.01, 0.01, 0.01, 0.01, 0.01]
-b_range = [0.1, 0.1, 0.1, 0.1, 0.1]
-Y_range = [2, 2, 2, 2]
-c_range = [0.1, 0.1, 0.1, 0.1]
+visualize_while_training = False # show a plot of the output & target output of the network during training
+use_sparse_feedback      = False # zero out a proportion of the feedback weights
+sparse_feedback_prop     = 0.5   # proportion of feedback weights to set to 0
 
-colors = ["red", "blue", "green", "yellow", "brown", "purple", "white", "cyan", "orange", "magenta"][:n_out]
+# uniform distribution ranges for initial weights
+W_range = 0.1
+Y_range = 50
 
 # ---------------------------------------------------------------
 """                     Functions                             """
 # ---------------------------------------------------------------
 
 def create_data():
+    '''
+    Generate input & target data using sine & cosine functions.
+    '''
+
     x_set = np.zeros((n_in, sequence_length)).astype(np.float32)
     for i in range(n_in):
         # x = 2*(np.arange(sequence_length)/sequence_length - 0.5)*5
@@ -91,30 +91,25 @@ def sigmoid(x):
 """                     Network class                         """
 # ---------------------------------------------------------------
 
+# create input & target data
 x_set, t_set = load_data()
+# x_set, t_set = create_data()
 
 class Network:
     def __init__(self, n):
         '''
-        Initialize the network. Note: This also loads the MNIST dataset.
+        Initialize the network.
 
         Arguments:
-            n (tuple) : Number of units in each layer of the network, eg. (500, 100, 10).
+            n (tuple) : Number of units in each layer of the network, eg. (500, 100, 10),
+                        including the input layer.
         '''
 
-        if type(n) == int:
-            n = (n,)
+        self.n = n               # layer sizes - eg. (500, 100, 10)
+        self.M = len(self.n) - 1 # number of layers, not including the input layer
 
-        self.n = n           # layer sizes - eg. (500, 100, 10)
-        self.M = len(self.n) # number of layers
-
-        self.n_in  = get_x(0).size()[0] # input size
-        self.n_out = self.n[-1]        # output size
-
-        self.current_epoch = None # current epoch of simulation
-
-        print("Creating network with {} layers.".format(self.M))
-        print("--------------------------------")
+        print("Creating a network with {} layers.".format(self.M))
+        print("---------------------------------")
 
         self.init_layers()
 
@@ -128,16 +123,21 @@ class Network:
 
         # create all layers
         if self.M == 1:
-            self.l.append(finalLayer(net=self, m=-1, f_input_size=self.n_in))
+            self.l.append(finalLayer(net=self, m=0, f_input_size=self.n[0]))
         else:
-            self.l.append(hiddenLayer(net=self, m=0, f_input_size=self.n_in, b_input_size=self.n[1]))
-            for m in xrange(1, self.M-1):
-                self.l.append(hiddenLayer(net=self, m=m, f_input_size=self.n[m-1], b_input_size=self.n[m+1]))
+            for m in xrange(1, self.M):
+                self.l.append(hiddenLayer(net=self, m=m-1, f_input_size=self.n[m-1], b_input_size=self.n[m+1]))
             self.l.append(finalLayer(net=self, m=self.M-1, f_input_size=self.n[-2]))
 
     def out(self, x, t, prev_t, time):
         '''
-        Perform a pass through the network and update weights.
+        Simulate the network's activity over one timestep.
+
+        Arguments:
+            x (tensor)           : The activity of the input layer for this time step.
+            t (tensor/None)      : The target activity for the output layer for this time step.
+            prev_t (tensor/None) : The target activity for the output layer for the previous time step.
+            time (int)           : The current time step.
         '''
 
         if self.M == 1:
@@ -162,196 +162,132 @@ class Network:
                     self.l[m].update_b_input(self.l[-1].event_rate)
 
                     if prev_t is not None:
-                        self.l[m].burst(self.f_etas[m])
+                        self.l[m].burst(self.f_etas[m], self.b_etas[m])
 
             if t is not None:
                 self.l[-1].burst(self.f_etas[-1])
 
-    def train(self, f_etas, b_etas, n_epochs, save_simulation, simulations_folder=default_simulations_folder, folder_name="", overwrite=False, simulation_notes=None, current_epoch=None, plot=False):
+    def train(self, f_etas, b_etas, n_epochs, plot_activity=False, weight_decay=0):
+        '''
+        Train the network.
+
+        Arguments:
+            f_etas (list/tuple/int) : The learning rates for the feedforward weights.
+                                      If an int is provided, each layer will have the same learning rate.
+            b_etas (list/tuple/int) : The learning rates for the feedback weights.
+                                      If an int is provided, each layer will have the same learning rate.
+            n_epochs (int)          : The number of epochs of training.
+            plot_activity (bool)    : Whether to create a plot that compares the output & targets for the network.
+            weight_decay (int)      : Weight decay constant.
+        '''
+
         print("Starting training.\n")
 
-        if current_epoch != None:
-            self.current_epoch == current_epoch
-        elif self.current_epoch == None:
-            # set current epoch
-            self.current_epoch = 0
-
-        if self.current_epoch == 0:
-            continuing = False
-        else:
-            continuing = True
-
-        # get current date/time and create simulation directory
-        if save_simulation:
-            sim_start_time = datetime.datetime.now()
-
-            if folder_name == "":
-                self.simulation_path = os.path.join(simulations_folder, "{}.{}.{}-{}.{}".format(sim_start_time.event_rateear,
-                                                                                 sim_start_time.month,
-                                                                                 sim_start_time.day,
-                                                                                 sim_start_time.hour,
-                                                                                 sim_start_time.minute))
-            else:
-                self.simulation_path = os.path.join(simulations_folder, folder_name)
-
-            # make simulation directory
-            if not os.path.exists(self.simulation_path):
-                os.makedirs(self.simulation_path)
-            elif not continuing:
-                if overwrite == False:
-                    print("Error: Simulation directory \"{}\" already exists.".format(self.simulation_path))
-                    return
-                else:
-                    shutil.rmtree(self.simulation_path, ignore_errors=True)
-                    os.makedirs(self.simulation_path)
-
-            # copy current script to simulation directory
-            filename = os.path.basename(__file__)
-            if filename.endswith('pyc'):
-                filename = filename[:-1]
-            shutil.copyfile(filename, os.path.join(self.simulation_path, filename))
-
-            params = {
-                'n'                      : self.n,
-                'f_etas'                 : f_etas,
-                'b_etas'                 : b_etas,
-                'sequence_length'        : sequence_length,
-                'n_epochs'               : n_epochs
-            }
-
-            # save simulation params
-            if not continuing:
-                with open(os.path.join(self.simulation_path, 'simulation.txt'), 'w') as simulation_file:
-                    print("Simulation done on {}.{}.{}-{}.{}.".format(sim_start_time.event_rateear,
-                                                                     sim_start_time.month,
-                                                                     sim_start_time.day,
-                                                                     sim_start_time.hour,
-                                                                     sim_start_time.minute), file=simulation_file)
-                    if simulation_notes:
-                        print(simulation_notes, file=simulation_file)
-                    print("Start time: {}".format(sim_start_time), file=simulation_file)
-                    print("-----------------------------", file=simulation_file)
-                    for key, value in sorted(params.items()):
-                        line = '{}: {}'.format(key, value)
-                        print(line, file=simulation_file)
-
-                with open(os.path.join(self.simulation_path, 'simulation.json'), 'w') as simulation_file:
-                    simulation_file.write(json.dumps(params))
+        self.weight_decay = weight_decay
 
         # set learning rate instance variables
         self.f_etas = f_etas
         self.b_etas = b_etas
 
-        if save_simulation and not continuing:
-            # save initial weights
-            self.save_weights(self.simulation_path, prefix='initial_')
+        if plot_activity:
+            # set colors for plotting the output & target output of the network during training
+            colors = ["red", "blue", "green", "purple", "brown", "cyan", "orange", "magenta"]
 
-        print("Start of epoch {}.\n".format(self.current_epoch + 1))
+            if len(colors) < self.n[-1]:
+                raise Exception("Number of output neurons exceeds the number of defined colors for plotting.")
 
-        # start time used for timing how long each 1000 examples take
-        start_time = None
-
-        avg_loss   = 0
-        no_t_count = 0
-
-        if plot:
-            # Create the figure
+            # create the figure
             self.figure = plt.figure(figsize=(15, 6), facecolor='white')
             self.animation_axis = plt.Axes(self.figure, [0.07, 0.07, 0.86, 0.36])
             self.figure.add_axes(self.animation_axis)
-            self.target_lines = [ self.animation_axis.plot([], [], color=colors[i], lw=1)[0] for i in range(self.n_out) ]
-            self.output_lines = [ self.animation_axis.plot([], [], color=colors[i], lw=1, linestyle='--', alpha=0.5)[0] for i in range(self.n_out) ]
+            self.target_lines = [ self.animation_axis.plot([], [], color=colors[i], lw=1)[0] for i in range(self.n[-1]) ]
+            self.output_lines = [ self.animation_axis.plot([], [], color=colors[i], lw=1, linestyle='--', alpha=0.5)[0] for i in range(self.n[-1]) ]
 
             self.animation_axis_2 = plt.Axes(self.figure, [0.07, 0.57, 0.86, 0.36])
             self.figure.add_axes(self.animation_axis_2)
             self.loss_line = self.animation_axis_2.plot([], [], color='red', lw=1)[0]
 
-            # Show the plot
+            # show the plot
             plt.ion()
             plt.show()
 
-        avg_losses = np.zeros((self.M, int(n_epochs*sequence_length/100.0)))
+            # initialize list of scatter points
+            scatter_points = []
+
+        # initialize counter for number of time steps at which no target is present
+        no_t_count = 0
+
+        # initialize array to hold average loss over each 100 time steps
+        # and a counter to keep track of where we are in the avg_losses array
+        # note: in the last epoch we don't present a target.
+        avg_losses = np.zeros((self.M, int((n_epochs-int(plot_activity))*sequence_length/100.0)))
         counter = 0
-        scatter_points = []
 
-        self.targets = np.zeros((sequence_length*n_epochs, self.n_out))
-        self.outputs = np.zeros((sequence_length*n_epochs, self.n_out))
+        # initialize arrays to hold targets and outputs over time
+        self.targets = np.zeros((sequence_length*n_epochs, self.n[-1]))
+        self.outputs = np.zeros((sequence_length*n_epochs, self.n[-1]))
 
-        show_target = False
-
+        # initialize target
         t = None
 
         for k in xrange(n_epochs):
+            # clear targets & outputs arrays
             self.targets *= 0
             self.outputs *= 0
 
-            for n in xrange(sequence_length):
-                # set start time
-                if start_time == None:
-                    start_time = time.time()
-
+            for time in xrange(sequence_length):
+                # set previous target
                 if t is not None:
                     prev_t = t.clone()
                 else:
                     prev_t = None
 
-                self.x = get_x(n)
-                self.t = get_t(n)
+                # get input & target for this time step
+                self.x = get_x(time)
+                self.t = get_t(time)
 
-                # self.x, self.t = next(iter(train_loader))
-
-                # print(self.t)
-
-                if (k < n_epochs-1 and np.random.uniform(0, 1) >= 1 - teach_prob):
+                if (k < n_epochs-int(plot_activity) and np.random.uniform(0, 1) >= 1 - teach_prob):
                     no_t = False
                     t    = self.t
-                    show_target = False
                 else:
                     no_t = True
                     t    = None
                     no_t_count += 1
 
-                # do a pass through the network & update weights
-                self.out(self.x, t, prev_t, n)
+                # simulate network activity for this time step
+                self.out(self.x, t, prev_t, time)
 
+                # add the loss to average loss, only if a target was present
                 if not no_t:
                     for m in xrange(self.M):
                         avg_losses[m, counter] += float(self.l[m].loss)
 
-                    # if self.l[-1].loss > 0.002:
-                    #     show_target = True
-
-                # avg_loss += self.l[-1].loss
-
-                self.targets[k*sequence_length + n] = self.t.numpy()[:, 0]
-                self.outputs[k*sequence_length + n] = self.l[-1].event_rates_prev[-1].numpy()[:, 0]
+                # record targets & outputs for this time step
+                self.targets[k*sequence_length + time] = self.t.numpy()[:, 0]
+                self.outputs[k*sequence_length + time] = self.l[-1].event_rates_prev[-1].numpy()[:, 0]
 
                 if visualize_while_training and (not no_t) and plot:
-                    for l in xrange(self.n_out):
-                        scatter_point = self.animation_axis.scatter(k*sequence_length + n, self.l[-1].event_rate.numpy()[l, 0], c=colors[l], s=10)
+                    # add scatter points
+                    for l in xrange(self.n[-1]):
+                        scatter_point = self.animation_axis.scatter(k*sequence_length + time, self.l[-1].event_rate.numpy()[l, 0], c=colors[l], s=10)
                         scatter_points.append(scatter_point)
 
-                if (n+1) % 100 == 0:
+                if (time+1) % 100 == 0 and k < n_epochs-int(plot_activity):
+                    # compute average loss over the last 100 time steps
+                    # minus those where a target wasn't present
                     if 100 - no_t_count > 0:
                         avg_losses[:, counter] /= (100 - no_t_count)
                     no_t_count = 0
                     counter += 1
 
-                if (n+1) % 1000 == 0:
-                    # if n != sequence_length - 1:
-                    #     sys.stdout.write("\x1b[2K\rEpoch {0}, example {1}/{2}. ".format(self.current_epoch + 1, n+1, sequence_length))
-                    print("Epoch {}, t={}. Average loss: {}. ".format(self.current_epoch + 1, n+1, avg_losses[-1, counter-1]))
+                if (time+1) % 100 == 0 and k < n_epochs-int(plot_activity):
+                    print("Epoch {:>3d}, t={:>4d}. Average loss: {:.10f}.".format(k+1, time+1, avg_losses[-1, counter-1]))
 
                     no_t_count = 0
 
-                    # get end time & reset start time
-                    end_time = time.time()
-                    time_elapsed = end_time - start_time
-                    print("T: {0:.3f}s.\n".format(time_elapsed))
-                    start_time = None
-
-            if visualize_while_training and plot:
-                for l in xrange(self.n_out):
+            if visualize_while_training and plot_activity:
+                # update plot
+                for l in xrange(self.n[-1]):
                     min_x = max(0, (k+1)*sequence_length-2000)
                     max_x = (k+1)*sequence_length
                     self.target_lines[l].set_data(np.arange(min_x, max_x), self.targets[min_x:max_x, l])
@@ -371,11 +307,9 @@ class Network:
                     scatter_points[i].remove()
                 scatter_points = []
 
-            # update latest epoch counter
-            self.current_epoch += 1
-
-        if not visualize_while_training and plot:
-            for l in xrange(self.n_out):
+        if not visualize_while_training and plot_activity:
+            # create plot
+            for l in xrange(self.n[-1]):
                 min_x = max(0, n_epochs*sequence_length-2000)
                 max_x = n_epochs*sequence_length
                 self.target_lines[l].set_data(np.arange(min_x, max_x), self.targets[min_x:max_x, l])
@@ -391,13 +325,6 @@ class Network:
             plt.draw()
             plt.pause(100000)
 
-        # record end time of training
-        if save_simulation:
-            with open(os.path.join(self.simulation_path, 'simulation.txt'), 'a') as simulation_file:
-                sim_end_time = datetime.datetime.now()
-                print("-----------------------------", file=simulation_file)
-                print("End time: {}".format(sim_end_time), file=simulation_file)
-
         return avg_losses
 
     def save_weights(self, path, prefix=""):
@@ -412,6 +339,8 @@ class Network:
         for m in xrange(self.M):
             np.save(os.path.join(path, prefix + "W_{}.npy".format(m)), self.l[m].W)
             np.save(os.path.join(path, prefix + "b_{}.npy".format(m)), self.l[m].b)
+            if m != self.M-1:
+                np.save(os.path.join(path, prefix + "Y_{}.npy".format(m)), self.l[m].Y)
 
     def load_weights(self, path, prefix=""):
         '''
@@ -428,24 +357,33 @@ class Network:
         for m in xrange(self.M):
             self.l[m].W = np.load(os.path.join(path, prefix + "W_{}.npy".format(m)))
             self.l[m].b = np.load(os.path.join(path, prefix + "b_{}.npy".format(m)))
+            if m != self.M-1:
+                self.l[m].Y = np.load(os.path.join(path, prefix + "Y_{}.npy".format(m)))
 
         # print network weights
         self.print_weights()
 
         print("--------------------------------")
 
-    def set_weights(self, W_list, b_list, Y_list, c_list):
+    def set_weights(self, W_list, b_list, Y_list):
+        '''
+        Set the weights of the network.
+
+        Arguments:
+            W_list (list) : The feedforward weights of the network.
+            b_list (list) : The feedforward biases of the network.
+            Y_list (list) : The feedback weights of the network.
+        '''
+
+        if len(W_list) != self.M or len(b_list) != self.M or len(Y_list) != self.M-1:
+            raise Exception("There is a mismatch between provided weight lists and the number of layers in the network.")
+        
         for m in xrange(self.M):
             self.l[m].W = W_list[m].copy()
             self.l[m].b = b_list[m].copy()
 
             if m < self.M-1:
                 self.l[m].Y = Y_list[m].copy()
-                self.l[m].c = c_list[m].copy()
-
-                if use_sparse_feedback:
-                    self.l[m].Y_dropout_indices = np.random.choice(len(self.l[m].Y.ravel()), int(0.5*len(self.l[m].Y.ravel())), False)
-                    self.l[m].Y.ravel()[self.l[m].Y_dropout_indices] = 0
 
 # ---------------------------------------------------------------
 """                     Layer classes                         """
@@ -453,69 +391,96 @@ class Network:
 
 class Layer:
     def __init__(self, net, m, f_input_size):
+        '''
+        Create the layer.
+
+        Arguments:
+            net (Network)      : The network this layer belongs to.
+            m (int)            : The index of this layer (indexing starts at the first hidden layer).
+            f_input_size (int) : The size of the feedforward input. This is equivalent to the size
+                                 of the previous layer.
+        '''
+
+        # create all of the layer variables
         self.net      = net
         self.m        = m
-        self.size     = self.net.n[m]
+        self.size     = self.net.n[m+1]
 
-        self.f_input = torch.from_numpy(np.zeros((f_input_size, 1)).astype(np.float32))
+        self.f_input       = torch.from_numpy(np.zeros((f_input_size, 1)).astype(np.float32))
         self.f_inputs_prev = [ torch.from_numpy(np.zeros((f_input_size, 1)).astype(np.float32)) for i in range(10) ]
-        self.event_rates_prev = [ torch.from_numpy(np.zeros((self.size, 1)).astype(np.float32)) for i in range(10) ]
 
         self.y_pre  = torch.from_numpy(np.zeros((self.size, 1)).astype(np.float32))
-        self.event_rate  = torch.from_numpy(np.zeros((self.size, 1)).astype(np.float32))
-        self.spike_rate  = torch.from_numpy(np.zeros((self.size, 1)).astype(np.float32))
-        self.burst_rate  = torch.from_numpy(np.zeros((self.size, 1)).astype(np.float32))
-
-        self.E = torch.from_numpy(np.zeros((self.size, 1)).astype(np.float32))
-        self.t = torch.from_numpy(np.zeros((self.size, 1)).astype(np.float32))
-        self.loss = 0
+        
+        self.spike_rate       = torch.from_numpy(np.zeros((self.size, 1)).astype(np.float32))
+        self.burst_rate       = torch.from_numpy(np.zeros((self.size, 1)).astype(np.float32))
+        self.event_rate       = torch.from_numpy(np.zeros((self.size, 1)).astype(np.float32))
+        self.event_rates_prev = [ torch.from_numpy(np.zeros((self.size, 1)).astype(np.float32)) for i in range(10) ]
 
         self.b_input  = torch.from_numpy(np.zeros((self.size, 1)).astype(np.float32))
 
-        self.W = torch.from_numpy(W_range[self.m]*np.random.uniform(0, 1, size=(self.size, f_input_size)).astype(np.float32))
-        self.b = torch.from_numpy(b_range[self.m]*np.ones((self.size, 1)).astype(np.float32))
+        self.E = torch.from_numpy(np.zeros((self.size, 1)).astype(np.float32))
+
+        self.loss = 0
+
+        self.W = torch.from_numpy(W_range*np.random.uniform(-1, 1, size=(self.size, f_input_size)).astype(np.float32))
+        self.b = torch.from_numpy(0.1*np.ones((self.size, 1)).astype(np.float32))
 
         self.delta_W = torch.from_numpy(np.zeros(self.W.size()).astype(np.float32))
         self.delta_b = torch.from_numpy(np.zeros(self.b.size()).astype(np.float32))
 
     def update_f_input(self, f_input):
+        # update previous feedforward input
         del self.f_inputs_prev[0]
         self.f_inputs_prev.append(self.f_input.clone())
 
+        # update feedforward input
         self.f_input = f_input.clone()
 
+        # calculate pre-nonlinearity activity
         self.y_pre = self.W.mm(self.f_input) + self.b
 
+        # update previous event rate
         del self.event_rates_prev[0]
         self.event_rates_prev.append(self.event_rate.clone())
 
+        # update event rate
         self.event_rate = torch.sigmoid(self.y_pre)
 
     def update_W(self, f_eta):
         self.delta_W = self.E.mm(self.f_input.t())
-
         self.W      += -f_eta*self.delta_W
 
         self.delta_b = self.E
         self.b      += -f_eta*self.delta_b
 
     def decay_W(self):
-        pass
-        self.W      -= 0.00001*self.W
+        self.W      -= self.net.weight_decay*self.W
 
 class hiddenLayer(Layer):
     def __init__(self, net, m, f_input_size, b_input_size):
+        '''
+        Create the hidden layer.
+
+        Arguments:
+            net (Network)      : The network this layer belongs to.
+            m (int)            : The index of this layer (indexing starts at the first hidden layer).
+            f_input_size (int) : The size of the feedforward input. This is equivalent to the size
+                                 of the previous layer.
+            b_input_size (int) : The size of the feedback input. This is equivalent to the size
+                                 of the next layer.
+        '''
+
         Layer.__init__(self, net, m, f_input_size)
 
-        self.Y = Y_range[self.m]*np.random.uniform(-1, 1, size=(self.size, self.net.n[-1])).astype(np.float32)
-        self.c = c_range[self.m]*np.random.uniform(-1, 1, size=(self.size, 1)).astype(np.float32)
+        # create feedback weights
+        self.Y = Y_range*np.random.uniform(-1, 1, size=(self.size, self.net.n[-1])).astype(np.float32)
 
         if use_sparse_feedback:
-            self.Y_dropout_indices = np.random.choice(len(self.Y.ravel()), int(0.5*len(self.Y.ravel())), False)
+            # zero out a proportion of the feedback weights
+            self.Y_dropout_indices = np.random.choice(len(self.Y.ravel()), int(sparse_feedback_prop*len(self.Y.ravel())), False)
             self.Y.ravel()[self.Y_dropout_indices] = 0
 
         self.Y = torch.from_numpy(self.Y)
-        self.c = torch.from_numpy(self.c)
 
         self.g  = torch.from_numpy(np.zeros((self.size, 1)).astype(np.float32))
         self.g_prev  = torch.from_numpy(np.zeros((self.size, 1)).astype(np.float32))
@@ -532,20 +497,37 @@ class hiddenLayer(Layer):
 
         self.spike_rate = (1.0 - self.burst_rate)*self.event_rate + self.burst_rate*self.event_rate*n_spikes_per_burst
 
-    def burst(self, f_eta):
+    def burst(self, f_eta, b_eta):
         self.burst_rate = torch.sigmoid(self.g - self.g_prev)
 
         self.E = (2*self.burst_rate - 1)*-self.event_rates_prev[-1]*(1.0 - self.event_rates_prev[-1])
+
+        self.E_inv = (self.g - self.g_prev)
 
         self.loss = torch.mean((2*self.burst_rate - 1)**2)
 
         self.update_W(f_eta)
 
+        self.decay_W()
+
+        self.update_Y(b_eta)
+
+        self.decay_Y()
+
     def update_Y(self, b_eta):
-        pass
-        # self.Y -= 0.001
-        # self.Y += torch.from_numpy(np.random.normal(0, 1, size=self.Y.size()).astype(np.float32))
-        # self.Y += np.random.normal(0, 0.001, size=self.Y.size())
+        self.delta_Y = self.E_inv.mm(self.b_input.t())
+        self.Y      += -b_eta*self.delta_Y
+
+        if use_sparse_feedback:
+            # zero out a proportion of the feedback weights
+            self.Y = self.Y.numpy()
+
+            self.Y.ravel()[self.Y_dropout_indices] = 0
+
+            self.Y = torch.from_numpy(self.Y)
+
+    def decay_Y(self):
+        self.Y -= self.net.weight_decay*self.Y
 
 class finalLayer(Layer):
     def __init__(self, net, m, f_input_size):
@@ -560,43 +542,14 @@ class finalLayer(Layer):
 
         self.update_W(f_eta)
 
+        self.decay_W()
+
     def update_activity(self, f_input, b_input=None):
+        Layer.update_f_input(self, f_input)
+
         if b_input is not None:
             self.b_input = b_input.clone()
 
             self.event_rate = 0.5*self.event_rate + 0.5*b_input.clone()
-        else:
-            Layer.update_f_input(self, f_input)
 
         self.spike_rate = self.event_rate
-
-# ---------------------------------------------------------------
-"""                     Helper functions                      """
-# ---------------------------------------------------------------
-
-def load_simulation(latest_epoch, folder_name, simulations_folder=default_simulations_folder):
-    simulation_path = os.path.join(simulations_folder, folder_name)
-
-    print("Loading simulation from \"{}\" @ epoch {}.\n".format(simulation_path, latest_epoch))
-
-    if not os.path.exists(simulation_path):
-        print("Error: Could not find simulation folder – path does not exist.")
-        return None
-
-    # load parameters
-    with open(os.path.join(simulation_path, 'simulation.json'), 'r') as simulation_file:
-        params = json.loads(simulation_file.read())
-
-    global sequence_length
-
-    n                       = params['n']
-    f_etas                  = params['f_etas']
-    b_etas                  = params['b_etas']
-    sequence_length         = params['sequence_length']
-
-    # create network and load weights
-    net = Network(n=n)
-    net.load_weights(simulation_path, prefix="epoch_{}_".format(latest_epoch))
-    net.current_epoch = latest_epoch + 1
-
-    return net, f_etas, b_etas
