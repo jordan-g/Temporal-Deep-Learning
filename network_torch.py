@@ -40,13 +40,13 @@ sparse_feedback_prop     = 0.5   # proportion of feedback weights to set to 0
 
 # uniform distribution ranges for initial weights
 W_range = 0.1
-Y_range = 50
+Y_range = 10
 
 # ---------------------------------------------------------------
 """                     Functions                             """
 # ---------------------------------------------------------------
 
-def create_data():
+def create_data(n_in, n_out):
     '''
     Generate input & target data using sine & cosine functions.
     '''
@@ -93,7 +93,7 @@ def sigmoid(x):
 
 # create input & target data
 x_set, t_set = load_data()
-# x_set, t_set = create_data()
+# x_set, t_set = create_data(500, 3)
 
 class Network:
     def __init__(self, n):
@@ -129,7 +129,7 @@ class Network:
                 self.l.append(hiddenLayer(net=self, m=m-1, f_input_size=self.n[m-1], b_input_size=self.n[-1]))
             self.l.append(finalLayer(net=self, m=self.M-1, f_input_size=self.n[-2]))
 
-    def out(self, x, t, prev_t, time):
+    def out(self, x, t, prev_t, time, use_backward_input=False, update_b_weights=False, update_f_weights=False):
         '''
         Simulate the network's activity over one timestep.
 
@@ -159,15 +159,15 @@ class Network:
 
             for m in xrange(self.M-1):
                 if time > self.M+1:
-                    self.l[m].update_b_input(self.l[-1].event_rate)
+                    self.l[m].update_b_input(self.l[-1].event_rate, self.b_etas[m], use_backward_input=use_backward_input, update_b_weights=update_b_weights)
 
                     if prev_t is not None:
-                        self.l[m].burst(self.f_etas[m], self.b_etas[m])
+                        self.l[m].burst(self.f_etas[m], self.b_etas[m], update_f_weights=update_f_weights)
 
             if t is not None:
-                self.l[-1].burst(self.f_etas[-1])
+                self.l[-1].burst(self.f_etas[-1], update_f_weights=update_f_weights)
 
-    def train(self, f_etas, b_etas, n_epochs, plot_activity=False, weight_decay=0):
+    def train(self, f_etas, b_etas, n_epochs, plot_activity=False, weight_decay=0, update_b_weights=False):
         '''
         Train the network.
 
@@ -197,15 +197,24 @@ class Network:
                 raise Exception("Number of output neurons exceeds the number of defined colors for plotting.")
 
             # create the figure
-            self.figure = plt.figure(figsize=(15, 6), facecolor='white')
+            self.figure = plt.figure(figsize=(15, 8), facecolor='white')
             self.animation_axis = plt.Axes(self.figure, [0.07, 0.07, 0.86, 0.36])
             self.figure.add_axes(self.animation_axis)
-            self.target_lines = [ self.animation_axis.plot([], [], color=colors[i], lw=1)[0] for i in range(self.n[-1]) ]
-            self.output_lines = [ self.animation_axis.plot([], [], color=colors[i], lw=1, linestyle='--', alpha=0.5)[0] for i in range(self.n[-1]) ]
+            self.target_lines = [ self.animation_axis.plot([], [], color=colors[i], lw=1, label='Unit {} Target'.format(i+1))[0] for i in range(self.n[-1]) ]
+            self.output_lines = [ self.animation_axis.plot([], [], color=colors[i], lw=1, linestyle='--', alpha=0.5, label='Unit {} Activity'.format(i+1))[0] for i in range(self.n[-1]) ]
 
             self.animation_axis_2 = plt.Axes(self.figure, [0.07, 0.57, 0.86, 0.36])
             self.figure.add_axes(self.animation_axis_2)
-            self.loss_line = self.animation_axis_2.plot([], [], color='red', lw=1)[0]
+            self.target_lines_2 = [ self.animation_axis_2.plot([], [], color=colors[i], lw=1, label='Unit {} Target'.format(i+1))[0] for i in range(self.n[-1]) ]
+            self.output_lines_2 = [ self.animation_axis_2.plot([], [], color=colors[i], lw=1, linestyle='--', alpha=0.5, label='Unit {} Activity'.format(i+1))[0] for i in range(self.n[-1]) ]
+
+            # self.loss_line = self.animation_axis_2.plot([], [], color='red', lw=1)[0]
+
+            self.animation_axis_2.set_title("Start of Training")
+            self.animation_axis_2.legend()
+
+            self.animation_axis.set_title("After Training")
+            self.animation_axis.set_xlabel("Timestep")
 
             # show the plot
             plt.ion()
@@ -226,14 +235,15 @@ class Network:
         # initialize arrays to hold targets and outputs over time
         self.targets = np.zeros((sequence_length*n_epochs, self.n[-1]))
         self.outputs = np.zeros((sequence_length*n_epochs, self.n[-1]))
+        self.target_times = []
 
         # initialize target
         t = None
 
         for k in xrange(n_epochs):
             # clear targets & outputs arrays
-            self.targets *= 0
-            self.outputs *= 0
+            # self.targets *= 0
+            # self.outputs *= 0
 
             for time in xrange(sequence_length):
                 # set previous target
@@ -249,13 +259,24 @@ class Network:
                 if (k < n_epochs-int(plot_activity) and np.random.uniform(0, 1) >= 1 - teach_prob):
                     no_t = False
                     t    = self.t
+                    self.target_times.append(k*sequence_length + time)
                 else:
                     no_t = True
                     t    = None
                     no_t_count += 1
 
+                # update_b_weights = k > n_epochs/2
+
+                update_f_weights = k < n_epochs-int(plot_activity)
+
                 # simulate network activity for this time step
-                self.out(self.x, t, prev_t, time)
+                # if k == n_epochs-int(plot_activity) and time > 500:
+                #     self.out(self.x, t, prev_t, time, use_backward_input=True, update_b_weights=False)
+                # else:
+                #     self.out(self.x, t, prev_t, time, update_b_weights=update_b_weights)
+
+
+                self.out(self.x, t, prev_t, time, use_backward_input=False, update_b_weights=update_b_weights, update_f_weights=update_f_weights)
 
                 # add the loss to average loss, only if a target was present
                 if not no_t:
@@ -311,17 +332,28 @@ class Network:
             for l in xrange(self.n[-1]):
                 min_x = max(0, n_epochs*sequence_length-2000)
                 max_x = n_epochs*sequence_length
-                self.target_lines[l].set_data(np.arange(min_x, max_x), self.targets[min_x:max_x, l])
-                self.output_lines[l].set_data(np.arange(min_x, max_x), self.outputs[min_x:max_x, l])
+                self.target_lines[l].set_data(np.arange(2000), self.targets[min_x:max_x, l])
+                self.output_lines[l].set_data(np.arange(2000), self.outputs[min_x:max_x, l])
+
+                self.target_lines_2[l].set_data(np.arange(2000), self.targets[0:2000, l])
+                self.output_lines_2[l].set_data(np.arange(2000), self.outputs[0:2000, l])
+
+                for target_time in self.target_times:
+                    if min_x <= target_time < max_x:
+                        self.animation_axis.scatter(target_time+1, self.outputs[target_time+1, l], c=colors[l], s=10)
+                    elif 0 <= target_time < 2000:
+                        self.animation_axis_2.scatter(target_time+1, self.outputs[target_time+1, l], c=colors[l], s=10)
 
                 self.animation_axis.relim()
                 self.animation_axis.autoscale_view(scalex=True, scaley=True)
 
-                self.loss_line.set_data(range(len(avg_losses[-1])), avg_losses[-1])
+                # self.loss_line.set_data(np.arange(len(avg_losses[-1]))*100, avg_losses[-1])
                 self.animation_axis_2.relim()
                 self.animation_axis_2.autoscale_view(scalex=True, scaley=True)
 
             plt.draw()
+            plt.savefig("outputs.svg")
+            plt.savefig("outputs.png")
             plt.pause(100000)
 
         return avg_losses
@@ -411,7 +443,10 @@ class Layer:
         self.y_pre  = torch.from_numpy(np.zeros((self.size, 1)).astype(np.float32))
         
         self.spike_rate       = torch.from_numpy(np.zeros((self.size, 1)).astype(np.float32))
+        self.burst_prob       = torch.from_numpy(np.zeros((self.size, 1)).astype(np.float32))
+        self.burst_prob_prev  = torch.from_numpy(np.zeros((self.size, 1)).astype(np.float32))
         self.burst_rate       = torch.from_numpy(np.zeros((self.size, 1)).astype(np.float32))
+        self.burst_rate_prev  = torch.from_numpy(np.zeros((self.size, 1)).astype(np.float32))
         self.event_rate       = torch.from_numpy(np.zeros((self.size, 1)).astype(np.float32))
         self.event_rates_prev = [ torch.from_numpy(np.zeros((self.size, 1)).astype(np.float32)) for i in range(10) ]
 
@@ -432,6 +467,7 @@ class Layer:
 
         # update feedforward input
         self.f_input = (self.f_input + f_input.clone())/2.0
+        # self.f_input = f_input.clone()
 
         # calculate pre-nonlinearity activity
         self.y_pre = self.W.mm(self.f_input) + self.b
@@ -469,7 +505,8 @@ class hiddenLayer(Layer):
 
         Layer.__init__(self, net, m, f_input_size)
 
-        self.b_input  = torch.from_numpy(np.zeros((b_input_size, 1)).astype(np.float32))
+        self.b_input      = torch.from_numpy(np.zeros((b_input_size, 1)).astype(np.float32))
+        self.b_input_prev = torch.from_numpy(np.zeros((b_input_size, 1)).astype(np.float32))
 
         # create feedback weights
         self.Y = Y_range*np.random.uniform(-1, 1, size=(self.size, self.net.n[-1])).astype(np.float32)
@@ -484,34 +521,57 @@ class hiddenLayer(Layer):
         self.g  = torch.from_numpy(np.zeros((self.size, 1)).astype(np.float32))
         self.g_prev  = torch.from_numpy(np.zeros((self.size, 1)).astype(np.float32))
 
-    def update_b_input(self, b_input):
+    def update_b_input(self, b_input, b_eta, use_backward_input=False, update_b_weights=False):
+        self.b_input_prev = self.b_input.clone()
+
         self.b_input = (self.b_input + b_input.clone())/2.0
+        # self.b_input = b_input.clone()
 
         self.g_prev = self.g.clone()
 
         self.g = self.Y.mm(self.b_input)
 
-    def update_f_input(self, f_input):
+        self.burst_prob_prev = self.burst_prob.clone()
+
+        self.burst_prob = torch.sigmoid(self.g)
+
+        self.burst_rate_prev = self.burst_rate.clone()
+
+        self.burst_rate = self.burst_prob*self.event_rate
+
+        if update_b_weights:
+            self.E_inv = self.event_rate*(self.event_rate - self.burst_rate)*-self.burst_prob*(1.0 - self.burst_prob)
+
+            self.update_Y(b_eta)
+
+            # self.decay_Y()
+
+        if use_backward_input:
+            self.event_rate = self.burst_rate.clone()
+
+    def update_f_input(self, f_input, use_backward_input=False):
         Layer.update_f_input(self, f_input)
 
         self.spike_rate = (1.0 - self.burst_rate)*self.event_rate + self.burst_rate*self.event_rate*n_spikes_per_burst
 
-    def burst(self, f_eta, b_eta):
-        self.burst_rate = torch.sigmoid(self.g - self.g_prev)
+    def burst(self, f_eta, b_eta, update_f_weights=True):
+        # self.burst_rate = torch.sigmoid(self.g - self.g_prev)
 
-        self.E = (2*self.burst_rate - 1)*-self.event_rates_prev[-1]*(1.0 - self.event_rates_prev[-1])
+        self.E = (self.burst_prob - self.burst_prob_prev)*-self.event_rate*(1.0 - self.event_rate)
 
-        self.E_inv = (self.g - self.g_prev)*-1
+        # self.E_inv = self.event_rate*(2*self.burst_rate_prev - self.event_rates_prev[-1] - self.burst_rate)*-self.burst_prob*(1.0 - self.burst_prob)
 
-        self.loss = torch.mean((2*self.burst_rate - 1)**2)
+        # self.loss = torch.mean((self.event_rates_prev[-1] + self.burst_prob - self.burst_prob_prev - self.burst_prob_prev)**2)
+        self.loss = torch.mean((self.burst_prob - self.burst_prob_prev)**2)
 
-        self.update_W(f_eta)
+        if update_f_weights:
+            self.update_W(f_eta)
 
-        self.decay_W()
+            self.decay_W()
 
-        self.update_Y(b_eta)
+        # self.update_Y(b_eta)
 
-        self.decay_Y()
+        # self.decay_Y()
 
     def update_Y(self, b_eta):
         self.delta_Y = self.E_inv.mm(self.b_input.t())
@@ -534,16 +594,17 @@ class finalLayer(Layer):
 
         self.b_input  = torch.from_numpy(np.zeros((self.size, 1)).astype(np.float32))
 
-    def burst(self, f_eta):
+    def burst(self, f_eta, update_f_weights=True):
         self.burst_rate = torch.sigmoid(self.event_rate - self.event_rates_prev[-1])
 
         self.E = (self.event_rate - self.event_rates_prev[-1])*-self.event_rates_prev[-1]*(1.0 - self.event_rates_prev[-1])
 
         self.loss = torch.mean((self.b_input - self.event_rates_prev[-1])**2)
 
-        self.update_W(f_eta)
+        if update_f_weights:
+            self.update_W(f_eta)
 
-        self.decay_W()
+            self.decay_W()
 
     def update_activity(self, f_input, b_input=None):
         Layer.update_f_input(self, f_input)
@@ -551,6 +612,6 @@ class finalLayer(Layer):
         if b_input is not None:
             self.b_input = b_input.clone()
 
-            self.event_rate = self.b_input.clone()
+            self.event_rate = (self.event_rate + self.b_input.clone())/2.0
 
         self.spike_rate = self.event_rate
