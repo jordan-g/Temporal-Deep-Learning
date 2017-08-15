@@ -101,6 +101,8 @@ class Network:
                 self.l.append(hiddenLayer(net=self, m=m-1, f_input_size=self.n[m-1], b_input_size=self.n[-1]))
             self.l.append(finalLayer(net=self, m=self.M-1, f_input_size=self.n[-2]))
 
+        print(self.l)
+
     def out(self, x, t, prev_t, time, generate_activity=False, update_b_weights=False, update_f_weights=False):
         '''
         Simulate the network's activity over one timestep.
@@ -139,7 +141,7 @@ class Network:
                     if prev_t is not None and update_f_weights:
                         self.l[m].burst(self.f_etas[m])
 
-            if t is not None and update_f_weights:
+            if time >= self.M and t is not None and update_f_weights:
                 self.l[-1].burst(self.f_etas[-1])
 
     def train(self, f_etas, b_etas, n_epochs, plot_activity=False, weight_decay=0, update_b_weights=False, generate_activity=False):
@@ -157,6 +159,18 @@ class Network:
             update_b_weights (bool)  : Whether to update feedback weights.
             generate_activity (bool) : Whether to internally generate activity during the second half of the last epoch.
         '''
+
+        if type(f_etas) is int:
+            f_etas = [f_etas]*self.M
+
+        if type(b_etas) is int:
+            f_etas = [b_etas]*(self.M-1)
+
+        if len(f_etas) != self.M:
+            raise Exception("Mismatch between the number of feedforward learning rates provided and the number of layers.")
+
+        if len(b_etas) != self.M-1:
+            raise Exception("Mismatch between the number of feedback learning rates provided and the number of hidden layers.")
 
         print("Starting training.\n")
 

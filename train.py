@@ -4,19 +4,19 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # feedforward learning rates
-f_etas = [5.0, 0.01]
+f_etas = [5.0, 5.0, 0.01]
 
 # feedback learning rates
-b_etas = [0.1]
+b_etas = [0.1, 0.1]
 
 # number of units per layer (including input layer)
-n = [500, 200, 3]
+n = [500, 200, 100, 3]
 
 # number of epochs of training (one epoch = one complete showing of the input sequence)
 n_epochs = 100
 
 # number of trials to repeat training
-n_trials = 10
+n_trials = 1
 
 # weight decay constant
 weight_decay  = 0.0
