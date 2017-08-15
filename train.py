@@ -39,7 +39,7 @@ for i in range(n_trials):
     net = network.Network(n=n)
 
     # train the network
-    loss = net.train(f_etas, b_etas, n_epochs, plot_activity=plot_activity, weight_decay=weight_decay, update_b_weights=True, generate_activity=generate_activity)
+    loss = net.train(f_etas, b_etas, n_epochs, plot_activity=plot_activity, weight_decay=weight_decay, update_b_weights=update_b_weights, generate_activity=generate_activity)
 
     losses[i] = loss
 
