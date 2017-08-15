@@ -4,13 +4,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # feedforward learning rates
-f_etas = [5.0, 5.0, 0.01]
+f_etas = [5.0, 0.01]
 
 # feedback learning rates
-b_etas = [0.1, 0.1]
+b_etas = [0.1]
 
 # number of units per layer (including input layer)
-n = [500, 200, 100, 3]
+n = [500, 200, 3]
 
 # number of epochs of training (one epoch = one complete showing of the input sequence)
 n_epochs = 100
@@ -21,7 +21,7 @@ n_trials = 1
 # weight decay constant
 weight_decay  = 0.0
 
-update_b_weights  = True # whether to update feedback weights
+update_b_weights  = False # whether to update feedback weights
 plot_activity     = True # whether to show a plot of the network activity vs. target activity, before and after training
 generate_activity = True # whether to internally generate activity during the second half of the last epoch
 

@@ -515,7 +515,7 @@ class hiddenLayer(Layer):
         self.loss = torch.mean((self.event_rate_prev + self.burst_prob - self.burst_prob_prev - self.burst_prob_prev)**2)
 
         # calculate error term
-        E = (self.burst_prob - self.burst_prob_prev)*-self.event_rate_prev*(1.0 - self.event_rate_prev)
+        E = self.event_rate*(self.burst_rate - self.burst_rate_prev)*-self.event_rate_prev*(1.0 - self.event_rate_prev)
 
         # update feedforward weights
         self.update_W(f_eta, E)
