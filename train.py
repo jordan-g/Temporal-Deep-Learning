@@ -9,9 +9,13 @@ b_etas = [0.1]
 
 n = [500, 200, 3]
 
-n_epochs      = 100
-n_trials      = 10
-plot_activity = False
+n_epochs = 100
+n_trials = 1
+
+update_b_weights  = True # whether to update feedback weights
+plot_activity     = True # whether to show a plot of the network activity vs. target activity, before and after training
+generate_activity = True # whether to internally generate activity during the second half of the last epoch
+
 weight_decay  = 0.0
 
 # initalize array to hold losses
@@ -24,13 +28,14 @@ for i in range(n_trials):
     net = network.Network(n=n)
 
     # train the network
-    loss = net.train(f_etas, b_etas, n_epochs, plot_activity=plot_activity, weight_decay=weight_decay, update_b_weights=False)
+    loss = net.train(f_etas, b_etas, n_epochs, plot_activity=plot_activity, weight_decay=weight_decay, update_b_weights=True, generate_activity=True)
 
     losses[i] = loss
 
 plt.ioff()
 plt.close('all')
 
+# create figure
 fig, ax = plt.subplots(figsize=(15, 8))
 ax.set_xlabel("Epoch")
 
@@ -43,8 +48,12 @@ for m in range(len(n)-1):
 
     if n_trials > 1:
         ax.fill_between(np.arange(losses.shape[-1])/20, losses_min, losses_max, facecolor=colors[m], alpha=0.3)
+
+        mean_alpha = 0.5
+    else:
+        mean_alpha = 1
     
-    ax.plot(np.arange(losses.shape[-1])/20, np.mean(losses[:, m], axis=0), colors[m], label='({}) Layer {} Loss'.format(layer_types[m], m+1), alpha=0.5)
+    ax.plot(np.arange(losses.shape[-1])/20, np.mean(losses[:, m], axis=0), colors[m], label='({}) Layer {} Loss'.format(layer_types[m], m+1), alpha=mean_alpha)
 
 plt.legend()
 plt.savefig('losses.svg')
