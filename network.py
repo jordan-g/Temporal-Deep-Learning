@@ -101,8 +101,6 @@ class Network:
                 self.l.append(hiddenLayer(net=self, m=m-1, f_input_size=self.n[m-1], b_input_size=self.n[-1]))
             self.l.append(finalLayer(net=self, m=self.M-1, f_input_size=self.n[-2]))
 
-        print(self.l)
-
     def out(self, x, t, prev_t, time, generate_activity=False, update_b_weights=False, update_f_weights=False):
         '''
         Simulate the network's activity over one timestep.
@@ -160,11 +158,14 @@ class Network:
             generate_activity (bool) : Whether to internally generate activity during the second half of the last epoch.
         '''
 
+        if not update_b_weights:
+            b_etas = 0
+
         if type(f_etas) is int:
             f_etas = [f_etas]*self.M
 
         if type(b_etas) is int:
-            f_etas = [b_etas]*(self.M-1)
+            b_etas = [b_etas]*(self.M-1)
 
         if len(f_etas) != self.M:
             raise Exception("Mismatch between the number of feedforward learning rates provided and the number of layers.")
