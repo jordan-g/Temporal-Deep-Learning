@@ -3,20 +3,31 @@ import torch
 import numpy as np
 import matplotlib.pyplot as plt
 
-# set training parameters
+# feedforward learning rates
 f_etas = [5.0, 0.01]
+
+# feedback learning rates
 b_etas = [0.1]
 
+# number of units per layer (including input layer)
 n = [500, 200, 3]
 
+# number of epochs of training (one epoch = one complete showing of the input sequence)
 n_epochs = 100
-n_trials = 1
+
+# number of trials to repeat training
+n_trials = 10
+
+# weight decay constant
+weight_decay  = 0.0
 
 update_b_weights  = True # whether to update feedback weights
 plot_activity     = True # whether to show a plot of the network activity vs. target activity, before and after training
 generate_activity = True # whether to internally generate activity during the second half of the last epoch
 
-weight_decay  = 0.0
+# don't plot activity if we are running multiple trials
+if n_trials > 1:
+    plot_activity = False
 
 # initalize array to hold losses
 losses = np.zeros((n_trials, len(n)-1, int((n_epochs-int(plot_activity))*network.sequence_length/100.0)))
