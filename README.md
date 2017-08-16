@@ -16,7 +16,7 @@ The network here is trained on learning a temporal sequence of outputs given a t
 
 Each time step, a hidden layer neuron <img alt="$i$" src="svgs/77a3b857d53fb44e33b53e4c8b68351a.png?invert_in_darkmode" align=middle width="5.663295000000005pt" height="21.683310000000006pt"/> calculates its somatic voltage, <img alt="$y^0_i$" src="svgs/f2af248053c53d5e4aded4609f4db6d0.png?invert_in_darkmode" align=middle width="15.201780000000003pt" height="26.76201000000001pt"/>, by multiplying the exponentially smoothed presynaptic input, <img alt="$\tilde{x}$" src="svgs/d0e77e0ae0c927639bbf59b3dd1c524b.png?invert_in_darkmode" align=middle width="9.395100000000005pt" height="21.95721pt"/>, by the feedforward weights <img alt="$W^0_i$" src="svgs/c429624422db8204fe8d584d5e9f09a1.png?invert_in_darkmode" align=middle width="24.360930000000003pt" height="26.76201000000001pt"/> and adding a bias term <img alt="$b^0_i$" src="svgs/a4d801a7bcc5e60b7625a6f958bfeb0c.png?invert_in_darkmode" align=middle width="13.607385000000003pt" height="26.76201000000001pt"/>:
 
-<p align="center"><img alt="$$&#10;y^0_i = \sum_{k} W^0_ik \tilde{x}_j + b^0_i&#10;$$" src="svgs/e96910b9f5e7f4a7501ead98c1ca3686.png?invert_in_darkmode" align=middle width="148.70327999999998pt" height="37.032104999999994pt"/></p>
+<p align="center"><img alt="$$&#10;y^0_i = \sum_{k} W^0_{ik} \tilde{x}_j + b^0_i&#10;$$" src="svgs/2524007e8d2324d988bd9b409019fe65.png?invert_in_darkmode" align=middle width="142.70915999999997pt" height="37.032104999999994pt"/></p>
 
 Then, the event rate of a neuron (the number of spiking events per timestep – either a single spike or a burst of spikes), <img alt="$\lambda^0_i$" src="svgs/70c1a65cc59e7170bd9e167cbb90d4b0.png?invert_in_darkmode" align=middle width="16.141620000000003pt" height="26.76201000000001pt"/>, is given by the standard sigmoid function applied to the somatic voltage:
 
@@ -24,7 +24,7 @@ Then, the event rate of a neuron (the number of spiking events per timestep – 
 
 All hidden layer neurons are fully connected to all output layer neurons. An output layer neuron <img alt="$j$" src="svgs/36b5afebdba34564d884d347484ac0c7.png?invert_in_darkmode" align=middle width="7.710483000000004pt" height="21.683310000000006pt"/> calculates its somatic voltage, <img alt="$y^1_i$" src="svgs/ec65b9fbdafb51436b6061d185b389f2.png?invert_in_darkmode" align=middle width="15.201780000000003pt" height="26.76201000000001pt"/>, by multiplying the exponentially smoothed presynaptic event rates, \tilde{\lambda}^0_i, by the feedforward weights <img alt="$W^1_j$" src="svgs/b30274615096949c0ec323c945eabb8d.png?invert_in_darkmode" align=middle width="24.360930000000003pt" height="26.76201000000001pt"/> and adding a bias term <img alt="$b^1_j$" src="svgs/8dc83b5c86c749277660452c65266788.png?invert_in_darkmode" align=middle width="13.607385000000003pt" height="26.76201000000001pt"/>:
 
-<p align="center"><img alt="$$&#10;y^1_j = \sum_{i} W^1_ji \tilde{\lambda}^0_i + b^1_j&#10;$$" src="svgs/0f67aa8ddb9bbe8c69b960acdfdbcea6.png?invert_in_darkmode" align=middle width="145.93326pt" height="36.655409999999996pt"/></p>
+<p align="center"><img alt="$$&#10;y^1_j = \sum_{i} W^1_{ji} \tilde{\lambda}^0_i + b^1_j&#10;$$" src="svgs/2e5b7b704399af4a2169110150b1eb11.png?invert_in_darkmode" align=middle width="142.18974pt" height="36.655409999999996pt"/></p>
 
 The event rate is calculated using the sigmoid function as above. The event rates of the output neurons are considered to be the output of the network.
 
