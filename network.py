@@ -507,7 +507,7 @@ class hiddenLayer(Layer):
             self.backward_loss = torch.mean((self.event_rate - self.burst_rate)**2)
 
             # calculate error term
-            E = self.event_rate*(self.event_rate - self.burst_rate)*-self.burst_prob*(1.0 - self.burst_prob)
+            E = (self.event_rate - self.burst_rate)*-self.burst_prob*(1.0 - self.burst_prob)
 
             # update feedback weights
             self.update_Y(b_eta, E)
@@ -519,10 +519,10 @@ class hiddenLayer(Layer):
 
     def burst(self, f_eta):
         # calculate feedforward loss
-        self.loss = torch.mean((self.event_rate_prev + self.burst_rate - self.burst_rate_prev - self.event_rate_prev)**2)
+        self.loss = torch.mean((self.event_rate_prev + self.burst_prob - self.burst_prob_prev - self.event_rate_prev)**2)
 
         # calculate error term
-        E = (self.burst_rate - self.burst_rate_prev)*-self.event_rate_prev*(1.0 - self.event_rate_prev)
+        E = (self.burst_prob - self.burst_prob_prev)*-self.event_rate_prev*(1.0 - self.event_rate_prev)
 
         # update feedforward weights
         self.update_W(f_eta, E)
@@ -530,7 +530,7 @@ class hiddenLayer(Layer):
 
     def update_Y(self, b_eta, E):
         # update feedback weights
-        self.delta_Y = E.mm(self.b_input_prev.t())
+        self.delta_Y = E.mm(self.b_input.t())
         self.Y      += -b_eta*self.delta_Y
 
         if use_sparse_feedback:
