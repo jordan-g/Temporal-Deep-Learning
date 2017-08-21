@@ -274,9 +274,15 @@ class Network:
                     # minus those where a target wasn't present
                     if 100 - no_t_count > 0:
                         avg_losses[:, counter] /= (100 - no_t_count)
-                        print("Epoch {:>3d}, t={:>4d}. Average loss: {:.10f}.".format(k+1, time+1, avg_losses[-1, counter]))
+                        if self.M > 1:
+                            print("Epoch {:>3d}, t={:>4d}. Avg. output loss: {:.10f}. Avg. last hidden loss: {:.10f}.".format(k+1, time+1, avg_losses[-1, counter], avg_losses[-2, counter]))
+                        else:
+                            print("Epoch {:>3d}, t={:>4d}. Avg. output loss: {:.10f}.".format(k+1, time+1, avg_losses[-1, counter]))
                     else:
-                        print("Epoch {:>3d}, t={:>4d}. Average loss: {}.".format(k+1, time+1, "_"*12))
+                        if self.M > 1:
+                            print("Epoch {:>3d}, t={:>4d}. Avg. output loss: {}. Avg. last hidden loss: {}.".format(k+1, time+1, "_"*12, "_"*12))
+                        else:
+                            print("Epoch {:>3d}, t={:>4d}. Avg. output loss: {}.".format(k+1, time+1, "_"*12))
                         
                     no_t_count = 0
                     counter   += 1
@@ -513,10 +519,10 @@ class hiddenLayer(Layer):
 
     def burst(self, f_eta):
         # calculate feedforward loss
-        self.loss = torch.mean((self.event_rate_prev + self.burst_prob - self.burst_prob_prev - self.burst_prob_prev)**2)
+        self.loss = torch.mean((self.event_rate_prev + self.burst_rate - self.burst_rate_prev - self.event_rate_prev)**2)
 
         # calculate error term
-        E = self.event_rate*(self.burst_rate - self.burst_rate_prev)*-self.event_rate_prev*(1.0 - self.event_rate_prev)
+        E = (self.burst_rate - self.burst_rate_prev)*-self.event_rate_prev*(1.0 - self.event_rate_prev)
 
         # update feedforward weights
         self.update_W(f_eta, E)
