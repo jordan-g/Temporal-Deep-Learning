@@ -4,7 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # feedforward learning rates
-f_etas = [5.0, 0.01]
+f_etas = [1.0, 0.05]
 
 # feedback learning rates
 b_etas = [0.1]

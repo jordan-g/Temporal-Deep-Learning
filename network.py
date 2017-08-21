@@ -274,9 +274,9 @@ class Network:
                     # minus those where a target wasn't present
                     if 100 - no_t_count > 0:
                         avg_losses[:, counter] /= (100 - no_t_count)
-                        print("Epoch {:>3d}, t={:>4d}. Average loss: {:.10f}.".format(k+1, time+1, avg_losses[-1, counter]))
+                        print("Epoch {:>3d}, t={:>4d}. Avg. output loss: {:.10f}. Avg. hidden loss: {:.10f}.".format(k+1, time+1, avg_losses[-1, counter], avg_losses[-2, counter]))
                     else:
-                        print("Epoch {:>3d}, t={:>4d}. Average loss: {}.".format(k+1, time+1, "_"*12))
+                        print("Epoch {:>3d}, t={:>4d}. Avg. output loss: {}. Avg. hidden loss: {}.".format(k+1, time+1, "_"*12, "_"*12))
                         
                     no_t_count = 0
                     counter   += 1
@@ -471,6 +471,10 @@ class hiddenLayer(Layer):
             self.Y.ravel()[self.Y_dropout_indices] = 0
         self.Y = torch.from_numpy(self.Y)
 
+        # inhibitory weights
+        self.R = Y_range*np.random.uniform(-1, 1, size=(self.size, self.size)).astype(np.float32)
+        self.R = torch.from_numpy(self.R)
+
         # apical voltage
         self.g = torch.from_numpy(np.zeros((self.size, 1)).astype(np.float32))
 
@@ -498,14 +502,21 @@ class hiddenLayer(Layer):
 
         if update_b_weights:
             # calculate feedback loss
-            self.backward_loss = torch.mean((self.event_rate - self.burst_rate)**2)
+            self.backward_loss = torch.mean((self.g)**2)
 
             # calculate error term
-            E = self.event_rate*(self.event_rate - self.burst_rate)*-self.burst_prob*(1.0 - self.burst_prob)
+            # E = self.event_rate*(self.event_rate - self.burst_rate)*-self.burst_prob*(1.0 - self.burst_prob)
 
             # update feedback weights
-            self.update_Y(b_eta, E)
-            self.decay_Y()
+            # self.update_Y(b_eta, E)
+            # self.decay_Y()
+
+            # calculate error term
+            E = -self.g
+
+            # update inhibitory weights
+            self.update_R(b_eta, E)
+            # self.decay_R()
 
         if generate_activity:
             # generate activity using feedback, by setting the event rate to be equal to the burst rate (which is determined by feedback)
@@ -513,10 +524,14 @@ class hiddenLayer(Layer):
 
     def burst(self, f_eta):
         # calculate feedforward loss
-        self.loss = torch.mean((self.event_rate_prev + self.burst_prob - self.burst_prob_prev - self.burst_prob_prev)**2)
+        self.loss = torch.mean((self.event_rate_prev + self.burst_rate - self.burst_rate_prev - self.event_rate_prev)**2)
 
         # calculate error term
-        E = self.event_rate*(self.burst_rate - self.burst_rate_prev)*-self.event_rate_prev*(1.0 - self.event_rate_prev)
+        E = (self.burst_rate - self.burst_rate_prev)*-self.event_rate_prev*(1.0 - self.event_rate_prev)
+        # E = (self.burst_prob - self.burst_prob_prev)*-self.event_rate_prev*(1.0 - self.event_rate_prev)
+
+        # print(torch.mean(E - 48*E_2), torch.min(E - 48*E_2), torch.max(E - 48*E_2))
+        # print(torch.mean(E), torch.min(E), torch.max(E))
 
         # update feedforward weights
         self.update_W(f_eta, E)
@@ -537,6 +552,14 @@ class hiddenLayer(Layer):
 
     def decay_Y(self):
         self.Y -= self.net.weight_decay*self.Y
+
+    def update_R(self, b_eta, E):
+        # update inhibitory weights
+        self.delta_R = E.mm(self.event_rate_prev.t())
+        self.R      += -b_eta*self.delta_R
+
+    def decay_R(self):
+        self.R -= self.net.weight_decay*self.R
 
 class finalLayer(Layer):
     def __init__(self, net, m, f_input_size):
