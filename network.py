@@ -77,7 +77,9 @@ class Network:
         # create input & target data
         try:
             self.x_set, self.t_set = load_data()
+            print("Loaded training data.")
         except:
+            print("Creating training data.")
             self.x_set, self.t_set = create_data(self.n[0], self.n[-1])
 
         print("Creating a network with {} layers.".format(self.M))
@@ -218,6 +220,8 @@ class Network:
         avg_losses = np.zeros((self.M, int((n_epochs-int(plot_activity))*sequence_length/100.0)))
         counter = 0
 
+        diff = np.zeros(int(sequence_length/2.0))
+
         # initialize arrays to hold targets and outputs over time
         self.targets = np.zeros((sequence_length*n_epochs, self.n[-1]))
         self.outputs = np.zeros((sequence_length*n_epochs, self.n[-1]))
@@ -239,7 +243,7 @@ class Network:
                 self.t = self.t_set[:, time].unsqueeze_(1)
 
                 # targets are not shown in the last epoch
-                if (k < n_epochs-int(plot_activity) and np.random.uniform(0, 1) >= 1 - teach_prob):
+                if (k < n_epochs-int(plot_activity or generate_activity) and np.random.uniform(0, 1) >= 1 - teach_prob):
                     no_t = False
                     t    = self.t
                     self.target_times.append(k*sequence_length + time)
@@ -249,13 +253,13 @@ class Network:
                     no_t_count += 1
 
                 # don't update feedback weights during the last epoch
-                update_b_weights = self.update_b_weights and k < n_epochs-int(plot_activity)
+                update_b_weights = self.update_b_weights and k < n_epochs-int(plot_activity or generate_activity)
 
                 # don't update feedforward weights during the last epoch
                 update_f_weights = k < n_epochs-int(plot_activity)
 
                 # internally generate activity during the second half of the last epoch
-                generate_activity = self.generate_activity and k == n_epochs-int(plot_activity) and time > sequence_length/2
+                generate_activity = self.generate_activity and k == n_epochs-1 and time >= sequence_length/2
 
                 # simulate network activity for this time step
                 self.out(self.x, t, prev_t, time, generate_activity=generate_activity, update_b_weights=update_b_weights, update_f_weights=update_f_weights)
@@ -268,6 +272,9 @@ class Network:
                 # record targets & outputs for this time step
                 self.targets[k*sequence_length + time] = self.t.numpy()[:, 0]
                 self.outputs[k*sequence_length + time] = self.l[-1].event_rate.numpy()[:, 0]
+
+                if generate_activity:
+                    diff[time - int(sequence_length/2)] = np.mean(np.abs(self.targets[k*sequence_length + time] - self.outputs[k*sequence_length + time]))
 
                 if (time+1) % 100 == 0 and k < n_epochs-int(plot_activity):
                     # compute average loss over the last 100 time steps
@@ -315,7 +322,10 @@ class Network:
             plt.savefig("outputs.png")
             plt.pause(100000)
 
-        return avg_losses
+        if not self.generate_activity:
+            return avg_losses
+        else:
+            return avg_losses, diff
 
     def save_weights(self, path, prefix=""):
         '''
