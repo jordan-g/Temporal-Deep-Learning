@@ -325,7 +325,7 @@ class Network:
         if not self.generate_activity:
             return avg_losses
         else:
-            return avg_losses, diff
+            return avg_losses, diff, self.outputs[(n_epochs-1)*sequence_length + int(sequence_length/2):], self.targets[(n_epochs-1)*sequence_length + int(sequence_length/2):]
 
     def save_weights(self, path, prefix=""):
         '''
