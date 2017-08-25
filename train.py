@@ -5,12 +5,14 @@ import matplotlib.pyplot as plt
 
 # feedforward learning rates
 f_etas = [5.0, 0.01]
+# f_etas = [0.1]
 
 # feedback learning rates
-b_etas = [0.1]
+b_etas = [0.0001]
 
 # number of units per layer (including input layer)
-n = [500, 200, 3]
+n = [2, 300, 3]
+# n = [2, 3]
 
 # number of epochs of training (one epoch = one complete showing of the input sequence)
 n_epochs = 100
@@ -21,7 +23,7 @@ n_trials = 1
 # weight decay constant
 weight_decay = 0.0
 
-update_b_weights  = True # whether to update feedback weights
+update_b_weights  = False # whether to update feedback weights
 plot_activity     = True # whether to show a plot of the network activity vs. target activity, before and after training
 generate_activity = True # whether to internally generate activity during the second half of the last epoch
 
@@ -39,7 +41,7 @@ for i in range(n_trials):
     net = network.Network(n=n)
 
     # train the network
-    loss = net.train(f_etas, b_etas, n_epochs, plot_activity=plot_activity, weight_decay=weight_decay, update_b_weights=update_b_weights, generate_activity=generate_activity)
+    loss, _, _, _ = net.train(f_etas, b_etas, n_epochs, plot_activity=plot_activity, weight_decay=weight_decay, update_b_weights=update_b_weights, generate_activity=generate_activity)
 
     losses[i] = loss
 

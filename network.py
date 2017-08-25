@@ -16,12 +16,16 @@ use_sparse_feedback  = False # zero out a proportion of the feedback weights
 sparse_feedback_prop = 0.5   # proportion of feedback weights to set to 0
 
 # uniform distribution ranges for initial weights
-W_range = 0.1
-Y_range = 10
+W_range = 0.3
+Y_range = 1.0
 
 # ---------------------------------------------------------------
 """                     Functions                             """
 # ---------------------------------------------------------------
+
+def running_mean(x, N):
+    cumsum = np.cumsum(np.insert(x, 0, 0)) 
+    return (cumsum[N:] - cumsum[:-N]) / N 
 
 def create_data(n_in, n_out):
     '''
@@ -31,14 +35,50 @@ def create_data(n_in, n_out):
     x_set = np.zeros((n_in, sequence_length)).astype(np.float32)
     for i in range(n_in):
         x = np.arange(sequence_length)
-        x_set[i] = 0.2 + 0.5*(np.sin(np.random.uniform(0.01, 0.04)*x + np.random.uniform(0, 20)) + 1)*np.random.uniform(0.1, 0.3)
-        x_set[i] += 0.5*(np.cos(np.random.uniform(0.01, 0.05)*x + np.random.uniform(0, 20)) + 1)*np.random.uniform(0.1, 0.3)
+        # x_set[i] = 0.2 + 0.5*(np.sin(np.random.uniform(0.01, 0.05)*x + np.random.uniform(0, 20)) + 1)*np.random.uniform(0.1, 0.3)
+        # x_set[i] += 0.5*(np.cos(np.random.uniform(0.01, 0.04)*x + np.random.uniform(0, 20)) + 1)*np.random.uniform(0.1, 0.3)
+        
+        x_set[i] += 0.5*(np.cos(np.random.uniform(0.01, 0.04)*x + np.random.uniform(0, 1)) + 1)*np.random.uniform(0.6, 0.8)
 
     t_set = np.zeros((n_out, sequence_length)).astype(np.float32)
     for i in range(n_out):
         x = np.arange(sequence_length)
-        t_set[i] = 0.2 + 0.5*(np.sin(np.random.uniform(0.01, 0.04)*x + np.random.uniform(0, 20)) + 1)*np.random.uniform(0.1, 0.3)
-        t_set[i] += 0.5*(np.cos(np.random.uniform(0.01, 0.05)*x + np.random.uniform(0, 20)) + 1)*np.random.uniform(0.1, 0.3)
+        # if i == 0:
+        #     t_set[i] = 0.2 + 0.5*(np.sin(np.random.uniform(0.01, 0.02)*x + np.random.uniform(0, 20)) + 1)*np.random.uniform(0.1, 0.3)
+        #     t_set[i] += 0.5*(np.cos(np.random.uniform(0.01, 0.02)*x + np.random.uniform(0, 20)) + 1)*np.random.uniform(0.1, 0.3)
+        # elif i == 1:
+        #     t_set[i] = 0.2 + 0.5*(np.sin(np.random.uniform(0.04, 0.06)*x + np.random.uniform(0, 20)) + 1)*np.random.uniform(0.1, 0.3)
+        #     t_set[i] += 0.5*(np.cos(np.random.uniform(0.04, 0.06)*x + np.random.uniform(0, 20)) + 1)*np.random.uniform(0.1, 0.3)
+        # elif i == 2:
+        #     t_set[i] = 0.2 + 0.5*(np.sin(np.random.uniform(0.07, 0.09)*x + np.random.uniform(0, 20)) + 1)*np.random.uniform(0.1, 0.3)
+        #     t_set[i] += 0.5*(np.cos(np.random.uniform(0.07, 0.09)*x + np.random.uniform(0, 20)) + 1)*np.random.uniform(0.1, 0.3)
+
+        if i == 0:
+            t_set[i] = np.zeros(x.shape)
+            t_set[i, np.logical_or(x_set[0] > 0.25, x_set[1] > 0.25)] = 0.8
+            t_set[i, np.logical_and(x_set[0] > 0.25, x_set[1] > 0.25)] = 0.2
+            t_set[i, np.logical_and(x_set[0] <= 0.25, x_set[1] <= 0.25)] = 0.2
+        elif i == 1:
+            t_set[i] = np.zeros(x.shape)
+            t_set[i, np.logical_or(x_set[0] < 0.5, x_set[1] < 0.5)] = 0.8
+            t_set[i, np.logical_and(x_set[0] < 0.5, x_set[1] < 0.5)] = 0.2
+            t_set[i, np.logical_and(x_set[0] >= 0.5, x_set[1] >= 0.5)] = 0.2
+        elif i == 2:
+            t_set[i] = np.zeros(x.shape)
+            t_set[i, np.logical_or(x_set[0] > 0.3, x_set[1] > 0.3)] = 0.8
+            t_set[i, np.logical_and(x_set[0] > 0.3, x_set[1] > 0.3)] = 0.2
+            t_set[i, np.logical_and(x_set[0] <= 0.3, x_set[1] <= 0.3)] = 0.2
+
+        for k in range(sequence_length):
+            t_set[:, k] = np.mean(t_set[:, max(0, k-5):min(sequence_length-1, k+6)], axis=-1)
+        for k in range(sequence_length-1, -1, -1):
+            t_set[:, k] = np.mean(t_set[:, max(0, k-5):min(sequence_length-1, k+6)], axis=-1)
+
+            # N = 4
+            # mean_t = running_mean(t_set[i], N)
+            # t_set[i, int(N/2):-int(N/2)+1] = mean_t
+
+
 
     np.save("x_set.npy", x_set)
     np.save("t_set.npy", t_set)
@@ -76,6 +116,7 @@ class Network:
 
         # create input & target data
         try:
+            # raise
             self.x_set, self.t_set = load_data()
             print("Loaded training data.")
         except:
@@ -159,6 +200,10 @@ class Network:
             update_b_weights (bool)  : Whether to update feedback weights.
             generate_activity (bool) : Whether to internally generate activity during the second half of the last epoch.
         '''
+
+        if self.M == 1:
+            update_b_weights = 0
+            generate_activity = False
 
         if not update_b_weights:
             b_etas = 0
@@ -434,7 +479,8 @@ class Layer:
         self.f_input_prev = self.f_input.clone()
 
         # apply exponential smoothing to feedforward input
-        self.f_input = (self.f_input + f_input.clone())/2.0
+        # self.f_input = (self.f_input + f_input.clone())/2.0
+        self.f_input = f_input.clone()
 
         # calculate somatic voltage
         self.h = self.W.mm(self.f_input) + self.b
@@ -488,14 +534,18 @@ class hiddenLayer(Layer):
         self.Y = torch.from_numpy(self.Y)
 
         # apical voltage
-        self.g = torch.from_numpy(np.zeros((self.size, 1)).astype(np.float32))
+        self.g      = torch.from_numpy(np.zeros((self.size, 1)).astype(np.float32))
+        self.g_prev = torch.from_numpy(np.zeros((self.size, 1)).astype(np.float32))
 
     def update_b_input(self, b_input, b_eta, generate_activity=False, update_b_weights=False):
         # update previous feedback input
         self.b_input_prev = self.b_input.clone()
 
         # apply exponential smoothing to feedback input
-        self.b_input = (self.b_input + b_input.clone())/2.0
+        # self.b_input = (self.b_input + b_input.clone())/2.0
+        self.b_input = b_input.clone()
+
+        self.g_prev = self.g.clone()
 
         # calculate apical voltage
         self.g = self.Y.mm(self.b_input)
@@ -533,6 +583,7 @@ class hiddenLayer(Layer):
 
         # calculate error term
         E = (self.burst_prob - self.burst_prob_prev)*-self.event_rate_prev*(1.0 - self.event_rate_prev)
+        # E = (self.g - self.g_prev)*-self.event_rate_prev*(1.0 - self.event_rate_prev)
 
         # update feedforward weights
         self.update_W(f_eta, E)
@@ -577,7 +628,8 @@ class finalLayer(Layer):
             self.target = target.clone()
 
             # push the event rate towards the target
-            self.event_rate = (self.event_rate + self.target.clone())/2.0
+            # self.event_rate = (self.event_rate + self.target.clone())/2.0
+            self.event_rate = self.target.clone()
 
         # update spike rate
         self.spike_rate = self.event_rate
