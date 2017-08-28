@@ -4,18 +4,18 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # feedforward learning rates
-f_etas = [5.0, 0.01]
-# f_etas = [0.1]
+f_etas = [20.0, 0.01]
+f_etas = [0.01]
 
 # feedback learning rates
 b_etas = [0.0001]
 
 # number of units per layer (including input layer)
-n = [2, 300, 3]
-# n = [2, 3]
+n = [500, 300, 3]
+n = [500, 3]
 
 # number of epochs of training (one epoch = one complete showing of the input sequence)
-n_epochs = 100
+n_epochs = 10
 
 # number of trials to repeat training
 n_trials = 1
@@ -24,15 +24,16 @@ n_trials = 1
 weight_decay = 0.0
 
 update_b_weights  = False # whether to update feedback weights
-plot_activity     = True # whether to show a plot of the network activity vs. target activity, before and after training
-generate_activity = True # whether to internally generate activity during the second half of the last epoch
+plot_activity     = True  # whether to show a plot of the network activity vs. target activity, before and after training
+generate_activity = True  # whether to internally generate activity during the second half of the last epoch
 
 # don't plot activity if we are running multiple trials
 if n_trials > 1:
     plot_activity = False
 
 # initalize array to hold losses
-losses = np.zeros((n_trials, len(n)-1, int((n_epochs-int(plot_activity))*network.sequence_length/100.0)))
+losses = np.zeros((n_trials, len(n)-1, int(n_epochs*network.n_sequences*network.sequence_length/100.0)))
+errors = np.zeros((n_trials, n_classes))
 
 for i in range(n_trials):
     print("Trial {:>2d}/{:>2d}. --------------------".format(i+1, n_trials))
@@ -41,9 +42,10 @@ for i in range(n_trials):
     net = network.Network(n=n)
 
     # train the network
-    loss, _, _, _ = net.train(f_etas, b_etas, n_epochs, plot_activity=plot_activity, weight_decay=weight_decay, update_b_weights=update_b_weights, generate_activity=generate_activity)
+    loss, error, _, _, _ = net.train(f_etas, b_etas, n_epochs, plot_activity=plot_activity, weight_decay=weight_decay, update_b_weights=update_b_weights, generate_activity=generate_activity)
 
     losses[i] = loss
+    errors[i] = error
 
 plt.ioff()
 plt.close('all')
