@@ -2,7 +2,7 @@ The network here is trained on learning a set of temporal sequences of outputs g
 
 ## Training Set
 
-The training set consists of 10 classes of input-target sequences – each class is based on a distinct set of input and target sequences which are perturbed slightly in order to generate different examples from that class. Note that the target here refers to the target \textit{event rates} of the output layer units (see Network Structure and Dynamics). For a given class, we first randomly generate the canonical input & target output sequences which examples from that class will be based on. The canonical sequence for input unit $i$ is given by a randomly generated sinusoidal curve:
+The training set consists of 10 classes of input-target sequences – each class is based on a distinct set of input and target sequences which are perturbed slightly in order to generate different examples from that class. Note that the target here refers to the target *event rates* of the output layer units (see Network Structure and Dynamics). For a given class, we first randomly generate the canonical input & target output sequences which examples from that class will be based on. The canonical sequence for input unit $i$ is given by a randomly generated sinusoidal curve:
 
 \begin{equation}
 x_i(t) = A_i \text{cos}(B_i t + C_i) + 0.5
@@ -38,7 +38,7 @@ $a$ and $b$ are chosen randomly for each output unit. The threshold $\gamma$ is 
 
 Thus, the target activity for each of the output units is to be active when either input $x_a$ or $x_b$ is active, but not when both are active, regardless of the activities of the other inputs (see Figure 1).
 
-![Activity sequence of output unit 0 for training class 0, and the activity sequences of the two input units which the target activity of output unit 0 was based on, $a = 417$ and $b = 442$. This shows the XOR function properties of the target activities – the target activity of output unit 0 is high when either input has high activity, but not when both do. \textit{Solid lines:} Canonical sequences for the given class. \textit{Dotted lines:} Training example sequences generated based on the canonical curves.](xor_example.png)
+![Activity sequence of output unit 0 for training class 0, and the activity sequences of the two input units which the target activity of output unit 0 was based on, $a = 417$ and $b = 442$. This shows the XOR function properties of the target activities – the target activity of output unit 0 is high when either input has high activity, but not when both do. *Solid lines:* Canonical sequences for the given class. *Dotted lines:* Training example sequences generated based on the canonical curves.](xor_example.png)
 
 In order to generate training examples from this class, we add random variations to the amplitude and vertical shift of the canonical sequence curves. For input unit $i$ we define:
 
@@ -102,11 +102,11 @@ and, to generate an example sequence, $\hat{\psi}^1_i(t)$ is adjusted so that:
 
 Figure 2 shows some of the input & target sequences generated for different classes, and training examples drawn from each class.
 
-![Input & target sequences for different classes, and sample sequences drawn from each class. \textbf{a.} Activity sequences of input unit 0 representing three different classes of training data. \textbf{b.} Activity sequences of output unit 0 representing three different classes of training data. \textit{Solid lines:} Canonical sequences for the given class. \textit{Dotted lines:} Training example sequences generated based on the canonical curves.](training_classes.png)
+![Input & target sequences for different classes, and sample sequences drawn from each class. **a.** Activity sequences of input unit 0 representing three different classes of training data. **b.** Activity sequences of output unit 0 representing three different classes of training data. *Solid lines:* Canonical sequences for the given class. *Dotted lines:* Training example sequences generated based on the canonical curves.](training_classes.png)
 
 ## Network Structure and Dynamics
 
-![Diagram of the network. \textbf{a.} Network variables and connections. \textbf{b.} Temporal dynamics of the network.](network_diagram.png)
+![Diagram of the network. **a.** Network variables and connections. **b.** Temporal dynamics of the network.](network_diagram.png)
 
 A diagram showing the network structure and dynamics is shown in Figure 3. Assume the network has $l$ inputs, $m$ hidden units and $n$ output units. Unit $j$ in the hidden layer has two compartments: a somatic compartment with voltage $y^0_j$ and an apical dendrite compartment with voltage $g^0_j$. At time $t$, $y^0_j(t)$ is given by:
 
@@ -126,7 +126,7 @@ where $\bm{W}^0$ is the $m \times l$ matrix of the synaptic weights between the 
 \end{split}
 \end{align}
 
-The hidden unit's \textit{event rate} $\psi^0_j$, defined as the expected number of spike events (either single spikes or bursts) per unit time, is given by a sigmoid applied to the somatic voltage:
+The hidden unit's *event rate* $\psi^0_j$, defined as the expected number of spike events (either single spikes or bursts) per unit time, is given by a sigmoid applied to the somatic voltage:
 
 \begin{align}
 \begin{split}
@@ -167,7 +167,7 @@ g^0_j(t) &= \sum_{k=1}^n Y_{jk} \tilde{\psi}^1_k(t-1)
 \end{split}
 \end{align}
 
-where $\bm{Y}$ are the feedback synaptic weights between the output layer and hidden layer units, and $\tilde{\bm{\psi}}^1$ are the exponentially smoothed event rates of the output layer units, computed as in equation \eqref{eqn:exponential_smoothing}. The hidden unit's \textit{burst probability} $p^0_j$, defined as the probability that a spike event will be a burst (rather than a single spike), is the given by applying the sigmoid function to the apical voltage:
+where $\bm{Y}$ are the feedback synaptic weights between the output layer and hidden layer units, and $\tilde{\bm{\psi}}^1$ are the exponentially smoothed event rates of the output layer units, computed as in equation \eqref{eqn:exponential_smoothing}. The hidden unit's *burst probability* $p^0_j$, defined as the probability that a spike event will be a burst (rather than a single spike), is the given by applying the sigmoid function to the apical voltage:
 
 \begin{align}
 \begin{split}
@@ -175,7 +175,7 @@ p^0_j(t) &= \sigma(g^0_j(t)) = \frac{1}{1 + e^{-g^0_j(t)}}
 \end{split}
 \end{align}
 
-Finally, the \textit{burst rate} $\varphi^0_j$ is the product of the burst probability and the event rate:
+Finally, the *burst rate* $\varphi^0_j$ is the product of the burst probability and the event rate:
 
 \begin{align}
 \begin{split}
@@ -305,6 +305,6 @@ where $T=2000$, the length of the sequence.
 
 **mean_generation_error_comparison**. Plot of the generation error after 20 epochs of training, across 5 trials. For each network, there are 50 data points, corresponding to 5 trials, with 10 sequences (one from each class) being tested in each. The bars are the means.
 
-**activity**. \textit{Top:} Plot of the target output and output (event rate) of the network during the first sequence of training. Dots represent when the target was shown to the network. \textit{Bottom:} Plot of the target output and output of the network after training, during the test sequence that is the same class as in the top plot.
+**activity**. *Top:* Plot of the target output and output (event rate) of the network during the first sequence of training. Dots represent when the target was shown to the network. *Bottom:* Plot of the target output and output of the network after training, during the test sequence that is the same class as in the top plot.
 
 **generated_activity**. Plot of the target output and output of the network after training, where after 1000 timesteps the network begins to generate activity without input.
