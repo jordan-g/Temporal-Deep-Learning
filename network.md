@@ -5,17 +5,16 @@ The network here is trained on learning a set of temporal sequences of outputs g
 The training set consists of 10 classes of input-target sequences – each class is based on a distinct set of input and target sequences which are perturbed slightly in order to generate different examples from that class. Note that the target here refers to the target *event rates* of the output layer units (see Network Structure and Dynamics). For a given class, we first randomly generate the canonical input & target output sequences which examples from that class will be based on. The canonical sequence for input unit $i$ is given by a randomly generated sinusoidal curve:
 
 \begin{equation}
+\label{eqn:canonical_input}
 x_i(t) = A_i \text{cos}(B_i t + C_i) + 0.5
 \end{equation}
 
 where the amplitude factor $A_i$, the frequency $B_i$ and the phase $C_i$ are drawn from uniform distributions:
 
 \begin{align}
-\begin{split}
 A_i &\sim \text{U}(0.2, 0.4) \\
 B_i &\sim \text{U}(0.005, 0.03) \\
 C_i &\sim \text{U}(0, 1)
-\end{split}
 \end{align}
 
 The canonical target sequences for the 3 output units are generated in order to introduce some complexity in the functions that need to be learned – specifically, XOR functions. This is done because an XOR function cannot be properly learned without a hidden layer of neurons.
@@ -23,13 +22,13 @@ The canonical target sequences for the 3 output units are generated in order to 
 For each output unit $j$, we define the target sequence $\hat{\psi}^1_j$ as
 
 \begin{align}
-\begin{split}
-\hat{\psi}^1_j(t) &= \left\{ \begin{array}{lr}
-       0.8 \text{,} \quad \text{ if } x_a(t) > \gamma \text{ or } x_b(t) > \gamma \\
-       0.2 \text{,} \quad \text{ if } x_a(t) > \gamma \text{ and } x_b(t) > \gamma \\
-       0.2 \text{,} \quad \text{ if } x_a(t) \leq \gamma \text{ and } x_b(t) \leq \gamma
-\end{array} \right.
-\end{split}
+\label{eqn:canonical_target}
+\hat{\psi}^1_j(t) &= \left\{
+        \begin{array}{lr}
+        0.8 \text{,} \quad \text{ if } x_a(t) > \gamma \text{ or } x_b(t) > \gamma \\
+        0.2 \text{,} \quad \text{ if } x_a(t) > \gamma \text{ and } x_b(t) > \gamma \\
+        0.2 \text{,} \quad \text{ if } x_a(t) \leq \gamma \text{ and } x_b(t) \leq \gamma
+        \end{array} \right.
 \end{align}
 
 This is the XOR function applied to the thresholded versions of inputs $x_a(t)$ and $x_b(t)$, with a threshold $\gamma$, where $a$ and $b$ are different for each target unit. This creates a square wave, which is finally smoothed by fitting a cubic spline to $\hat{\psi}^1_j$.
