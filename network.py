@@ -22,7 +22,7 @@ sparse_feedback_prop = 0.5   # proportion of feedback weights to set to 0
 
 # uniform distribution ranges for initial weights
 W_range = 0.1
-Y_range = 1.0
+Y_range = 0.1
 
 # ---------------------------------------------------------------
 """                     Functions                             """
@@ -190,6 +190,9 @@ def get_x(k, n):
 def get_t(k, n):
     return t_set[k, :, n].unsqueeze_(1)
 
+def inv_sigmoid(x):
+    return torch.log(x/(1-x))
+
 # ---------------------------------------------------------------
 """                     Network class                         """
 # ---------------------------------------------------------------
@@ -265,16 +268,16 @@ class Network:
             for m in range(self.M-2, -1, -1):
                 if time >= m+1:
                     if m == 0:
-                        self.l[0].update_f_input(x)
+                        self.l[0].update_f_input(x, generate_activity=generate_activity)
                     else:
-                        self.l[m].update_f_input(self.l[m-1].event_rate)
+                        self.l[m].update_f_input(self.l[m-1].event_rate, generate_activity=generate_activity)
 
             for m in range(self.M-1):
                 if time > self.M+1:
                     self.l[m].update_b_input(self.l[-1].event_rate, self.b_etas[m], generate_activity=generate_activity, update_b_weights=update_b_weights)
 
                     if prev_t is not None and update_f_weights and self.update_hidden_weights:
-                        self.l[m].burst(self.f_etas[m])
+                        self.l[m].burst(self.f_etas[m], self.b_etas[m], update_b_weights=update_b_weights)
 
             if time >= self.M and t is not None and update_f_weights:
                 self.l[-1].burst(self.f_etas[-1])
@@ -359,8 +362,9 @@ class Network:
 
         # initialize array to hold average loss over each 100 time steps
         # and a counter to keep track of where we are in the avg_training_losses array
-        avg_training_losses = np.zeros((self.M, int(n_epochs*sequence_length*n_sequences/100.0)))
+        avg_training_losses   = np.zeros((self.M, int(n_epochs*sequence_length*n_sequences/100.0)))
         avg_training_losses_2 = np.zeros((self.M, int(n_epochs*sequence_length*n_sequences/100.0)))
+        avg_training_losses_3 = np.zeros((self.M-1, int(n_epochs*sequence_length*n_sequences/100.0)))
         counter = 0
 
         test_errors = np.zeros(n_classes)
@@ -403,8 +407,16 @@ class Network:
                         t    = None
                         no_t_count += 1
 
+                    # if l < n_epochs/2:
+                    #     update_b_weights  = False
+                    #     update_f_weights  = t is not None or prev_t is not None
+                    # else:
+                    #     update_b_weights  = self.update_b_weights
+                    #     update_f_weights  = False
+
                     update_b_weights  = self.update_b_weights
                     update_f_weights  = t is not None or prev_t is not None
+
                     generate_activity = False
 
                     # simulate network activity for this time step
@@ -415,6 +427,8 @@ class Network:
                         for m in range(self.M):
                             avg_training_losses[m, counter] += float(self.l[m].loss)
                             avg_training_losses_2[m, counter] += float(self.l[m].loss_2)
+                            if m < self.M-1:
+                                avg_training_losses_3[m, counter] += float(self.l[m].backward_loss)
 
                     # record targets & outputs for this time step
                     self.targets[(l*n_sequences + k)*sequence_length + time] = self.t.numpy()[:, 0]
@@ -426,6 +440,7 @@ class Network:
                         if 100 - no_t_count > 0:
                             avg_training_losses[:, counter] /= (100 - no_t_count)
                             avg_training_losses_2[:, counter] /= (100 - no_t_count)
+                            avg_training_losses_3[:, counter] /= (100 - no_t_count)
                             if self.M > 1:
                                 print("Epoch {:>3d}, example {:>3d}, t={:>4d}. Avg. output loss: {:.10f}. Avg. last hidden loss: {:.10f}.".format(l+1, k+1, time+1, avg_training_losses_2[-1, counter], avg_training_losses[-2, counter]))
                             else:
@@ -482,14 +497,18 @@ class Network:
             for k in range(n_classes):
                 seq_num = seq_nums[k]
                 for time in range(sequence_length):
+                    generate_activity = time >= int(sequence_length/2)
+
                     # get input & target for this time step
                     self.x = self.x_set[seq_num, :, time].unsqueeze_(1)
+
+                    if generate_activity:
+                        self.x *= 0
+
                     self.t = self.t_set[seq_num, :, time].unsqueeze_(1)
 
                     update_b_weights  = False
                     update_f_weights  = False
-
-                    generate_activity = time >= int(sequence_length/2)
 
                     # simulate network activity for this time step
                     self.out(self.x, None, None, time, generate_activity=generate_activity, update_b_weights=update_b_weights, update_f_weights=update_f_weights)
@@ -504,9 +523,48 @@ class Network:
                         print("Generated activity example {:>3d}, t={:>4d}.".format(k+1, time+1))
 
         if not self.generate_activity:
-            return avg_training_losses, avg_training_losses_2, test_errors, self.outputs, self.targets, self.target_times, test_outputs, test_targets, class_nums
+            return avg_training_losses, avg_training_losses_2, avg_training_losses_3, test_errors, self.outputs, self.targets, self.target_times, test_outputs, test_targets, class_nums
         else:
-            return avg_training_losses, avg_training_losses_2, test_errors, self.outputs, self.targets, self.target_times, test_outputs, test_targets, class_nums, diff, generation_outputs, generation_targets
+            return avg_training_losses, avg_training_losses_2, avg_training_losses_3, test_errors, self.outputs, self.targets, self.target_times, test_outputs, test_targets, class_nums, diff, generation_outputs, generation_targets
+
+    def generate_activity(self):
+        diff = np.zeros((n_classes, int(sequence_length/2.0)))
+
+        seq_nums = np.arange(n_classes) + n_sequences
+        np.random.shuffle(seq_nums)
+
+        generation_targets = np.zeros((n_classes, sequence_length, self.n[-1]))
+        generation_outputs = np.zeros((n_classes, sequence_length, self.n[-1]))
+
+        for k in range(n_classes):
+            seq_num = seq_nums[k]
+            for time in range(sequence_length):
+                generate_activity = time >= int(sequence_length/2)
+
+                # get input & target for this time step
+                self.x = self.x_set[seq_num, :, time].unsqueeze_(1)
+
+                if generate_activity:
+                    self.x *= 0
+
+                self.t = self.t_set[seq_num, :, time].unsqueeze_(1)
+
+                update_b_weights  = False
+                update_f_weights  = False
+
+                # simulate network activity for this time step
+                self.out(self.x, None, None, time, generate_activity=generate_activity, update_b_weights=update_b_weights, update_f_weights=update_f_weights)
+
+                # record targets & outputs for this time step
+                generation_targets[k, time] = self.t.numpy()[:, 0]
+                generation_outputs[k, time] = self.l[-1].event_rate.numpy()[:, 0]
+
+                diff[k, time - int(sequence_length/2)] = np.mean(np.abs(generation_targets[k, time] - generation_outputs[k, time]))
+
+                if (time+1) % 100 == 0:
+                    print("Generated activity example {:>3d}, t={:>4d}.".format(k+1, time+1))
+
+        return diff, generation_outputs, generation_targets
 
     def save_weights(self, path, prefix=""):
         '''
@@ -518,10 +576,11 @@ class Network:
         '''
 
         for m in range(self.M):
-            np.save(os.path.join(path, prefix + "W_{}.npy".format(m)), self.l[m].W)
-            np.save(os.path.join(path, prefix + "b_{}.npy".format(m)), self.l[m].b)
+            np.save(os.path.join(path, prefix + "W_{}.npy".format(m)), self.l[m].W.numpy())
+            np.save(os.path.join(path, prefix + "b_{}.npy".format(m)), self.l[m].b.numpy())
             if m != self.M-1:
-                np.save(os.path.join(path, prefix + "Y_{}.npy".format(m)), self.l[m].Y)
+                np.save(os.path.join(path, prefix + "Y_{}.npy".format(m)), self.l[m].Y.numpy())
+                # np.save(os.path.join(path, prefix + "c_{}.npy".format(m)), self.l[m].c)
 
     def load_weights(self, path, prefix=""):
         '''
@@ -536,17 +595,15 @@ class Network:
         print("--------------------------------")
 
         for m in range(self.M):
-            self.l[m].W = np.load(os.path.join(path, prefix + "W_{}.npy".format(m)))
-            self.l[m].b = np.load(os.path.join(path, prefix + "b_{}.npy".format(m)))
+            self.l[m].W = torch.from_numpy(np.load(os.path.join(path, prefix + "W_{}.npy".format(m))))
+            self.l[m].b = torch.from_numpy(np.load(os.path.join(path, prefix + "b_{}.npy".format(m))))
             if m != self.M-1:
-                self.l[m].Y = np.load(os.path.join(path, prefix + "Y_{}.npy".format(m)))
-
-        # print network weights
-        self.print_weights()
+                self.l[m].Y = torch.from_numpy(np.load(os.path.join(path, prefix + "Y_{}.npy".format(m))))
+                # self.l[m].c = np.load(os.path.join(path, prefix + "c_{}.npy".format(m)))
 
         print("--------------------------------")
 
-    def set_weights(self, W_list, b_list, Y_list):
+    def set_weights(self, W_list, b_list, Y_list, c_list):
         '''
         Set the weights of the network.
 
@@ -565,6 +622,7 @@ class Network:
 
             if m < self.M-1:
                 self.l[m].Y = Y_list[m].copy()
+                self.l[m].c = c_list[m].copy()
 
 # ---------------------------------------------------------------
 """                     Layer classes                         """
@@ -607,8 +665,11 @@ class Layer:
         self.loss   = 0
         self.loss_2 = 0
 
+        # print(np.random.choice([-W_range, W_range], size=(self.size, f_input_size)).shape)
+
         # feedforward weights & biases
-        self.W = torch.from_numpy(W_range*np.random.uniform(-1, 1, size=(self.size, f_input_size)).astype(np.float32))
+        self.W = torch.from_numpy(np.random.choice([-W_range, W_range], size=(self.size, f_input_size)).astype(np.float32))
+        # self.W = torch.from_numpy(W_range*np.random.normal(0, 1, size=(self.size, f_input_size)).astype(np.float32))
         self.b = torch.from_numpy(0.1*np.ones((self.size, 1)).astype(np.float32))
 
     def clear_vars(self):
@@ -677,12 +738,22 @@ class hiddenLayer(Layer):
         self.b_input_prev = torch.from_numpy(np.zeros((b_input_size, 1)).astype(np.float32))
 
         # feedback weights
-        self.Y = Y_range*np.random.uniform(-1, 1, size=(self.size, self.net.n[-1])).astype(np.float32)
+        self.Y = Y_range*np.random.normal(0, 1, size=(self.size, self.net.n[-1])).astype(np.float32)
+        # self.Y = Y_range*np.ones((self.size, self.net.n[-1])).astype(np.float32)
         if use_sparse_feedback:
             # zero out a proportion of the feedback weights
             self.Y_dropout_indices = np.random.choice(len(self.Y.ravel()), int(sparse_feedback_prop*len(self.Y.ravel())), False)
             self.Y.ravel()[self.Y_dropout_indices] = 0
         self.Y = torch.from_numpy(self.Y)
+
+        # self.H = -0.1*Y_range*np.ones((self.size, self.size)).astype(np.float32)
+        self.H = np.zeros((self.size, self.size)).astype(np.float32)
+        # np.fill_diagonal(self.H, 0)
+        self.H = torch.from_numpy(self.H)
+
+        # self.c = torch.from_numpy(0.1*np.ones((self.size, 1)).astype(np.float32))
+
+        self.backward_loss = 0
 
         # apical voltage
         self.g      = torch.from_numpy(np.zeros((self.size, 1)).astype(np.float32))
@@ -697,6 +768,31 @@ class hiddenLayer(Layer):
         self.g      *= 0
         self.g_prev *= 0
 
+    def update_f_input(self, f_input, generate_activity=False):
+        # update previous feedforward input
+        self.f_input_prev = self.f_input.clone()
+
+        # apply exponential smoothing to feedforward input
+        self.f_input = (self.f_input + f_input.clone())/2.0
+        # self.f_input = f_input.clone()
+
+        # calculate somatic voltage
+        self.h = self.W.mm(self.f_input) + self.b + self.H.mm(self.event_rate)
+
+        # update previous event rate
+        self.event_rate_prev = self.event_rate.clone()
+
+        # update event rate
+        self.event_rate = torch.sigmoid(self.h)
+
+        # update spike rate
+        self.spike_rate = (1.0 - self.burst_rate)*self.event_rate + self.burst_rate*self.event_rate*n_spikes_per_burst
+
+        if generate_activity:
+            # generate activity using feedback, by setting the event rate to be equal to the burst probability (which is determined by feedback)
+            self.event_rate = self.burst_prob.clone()
+            # self.event_rate_prev = self.burst_prob_prev.clone()
+
     def update_b_input(self, b_input, b_eta, generate_activity=False, update_b_weights=False):
         # update previous feedback input
         self.b_input_prev = self.b_input.clone()
@@ -710,11 +806,15 @@ class hiddenLayer(Layer):
         # calculate apical voltage
         self.g = self.Y.mm(self.b_input)
 
+        # print(self.g.size())
+
         # update previous burst probability
         self.burst_prob_prev = self.burst_prob.clone()
 
         # update burst probability
         self.burst_prob = torch.sigmoid(self.g)
+
+        # print(self.burst_prob.size())
 
         # update previous burst rate
         self.burst_rate_prev = self.burst_rate.clone()
@@ -722,22 +822,20 @@ class hiddenLayer(Layer):
         # update burst rate
         self.burst_rate = self.burst_prob*self.event_rate
 
-        if update_b_weights:
-            # calculate feedback loss
-            self.backward_loss = torch.mean((self.event_rate - self.burst_rate)**2)
+        # if update_b_weights:
+        #     # calculate feedback loss
+        #     self.backward_loss = torch.mean((self.event_rate - self.burst_prob)**2)
 
-            # calculate error term
-            E = self.event_rate*(self.event_rate - self.burst_rate)*-self.burst_prob*(1.0 - self.burst_prob)
+        #     # calculate error term
+        #     E = (self.event_rate - self.burst_prob)*-self.burst_prob*(1.0 - self.burst_prob)
 
-            # update feedback weights
-            self.update_Y(b_eta, E)
-            self.decay_Y()
+        #     # print(E.size(), self.g_prev.t().size())
 
-        if generate_activity:
-            # generate activity using feedback, by setting the event rate to be equal to the burst rate (which is determined by feedback)
-            self.event_rate = self.burst_rate.clone()
+        #     # update feedback weights
+        #     self.update_Y(b_eta, E)
+        #     self.decay_Y()
 
-    def burst(self, f_eta):
+    def burst(self, f_eta, b_eta, update_b_weights=False):
         # calculate feedforward loss
         self.loss = torch.mean((self.burst_prob - self.burst_prob_prev)**2)
         self.loss_2 = self.loss
@@ -749,13 +847,31 @@ class hiddenLayer(Layer):
         # E = (self.burst_rate - self.burst_rate_prev)*-(1.0 - self.event_rate_prev)
 
         # update feedforward weights
+        # print("updating")
         self.update_W(f_eta, E)
         self.decay_W()
+
+        # self.update_H(f_eta, E)
+        # self.decay_H()
+
+        if update_b_weights:
+            # calculate feedback loss
+            self.backward_loss = torch.mean((self.event_rate - self.burst_prob)**2)
+
+            # calculate error term
+            E = (self.event_rate - self.burst_prob)*-self.burst_prob*(1.0 - self.burst_prob)
+
+            # update feedback weights
+            self.update_Y(b_eta, E)
+            self.decay_Y()
 
     def update_Y(self, b_eta, E):
         # update feedback weights
         self.delta_Y = E.mm(self.b_input.t())
         self.Y      += -b_eta*self.delta_Y
+
+        # self.delta_c = E
+        # self.c      += -b_eta*self.delta_c
 
         if use_sparse_feedback:
             # zero out a proportion of the feedback weights
@@ -767,6 +883,13 @@ class hiddenLayer(Layer):
 
     def decay_Y(self):
         self.Y -= self.net.weight_decay*self.Y
+
+    def update_H(self, f_eta, E):
+        self.delta_H = E.mm(self.event_rate_prev.t())
+        self.H      += -f_eta*self.delta_H
+
+    def decay_H(self):
+        self.H -= self.net.weight_decay*self.H
 
 class finalLayer(Layer):
     def __init__(self, net, m, f_input_size):

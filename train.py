@@ -10,7 +10,7 @@ n_epochs = 20
 # number of trials to repeat training
 n_trials = 5
 
-folder = "f_etas_5.0_0.01_500_inputs_7_target_nudge"
+folder = "f_etas_10.0_0.01_b_etas_0.0001_500_inputs_target_nudge_5"
 
 if not os.path.exists(folder):
     os.makedirs(folder)
@@ -65,7 +65,7 @@ if not os.path.exists(folder):
 # # ----- ONE HIDDEN LAYER ----- #
 
 # # feedforward learning rates
-# f_etas = [2.0, 0.01]
+# f_etas = [10.0, 0.01]
 
 # # number of units per layer (including input layer)
 # n = [500, 300, 3]
@@ -164,13 +164,13 @@ if not os.path.exists(folder):
 
 # ----- ONE HIDDEN LAYER, BACKWARD WEIGHT UPDATES ----- #
 
-# # feedforward learning rates
+# feedforward learning rates
 f_etas = [10.0, 0.01]
 
 # feedback learning rates
-b_etas = [0.001]
+b_etas = [0.0001]
 
-# # number of units per layer (including input layer)
+# number of units per layer (including input layer)
 n = [500, 300, 3]
 
 # initalize array to hold losses
@@ -214,3 +214,5 @@ np.save(os.path.join(folder, "class_nums_{}.npy".format(suffix)), class_nums)
 np.save(os.path.join(folder, "diffs_{}.npy".format(suffix)), diffs)
 np.save(os.path.join(folder, "generation_outputs_{}.npy".format(suffix)), generation_outputs)
 np.save(os.path.join(folder, "generation_targets_{}.npy".format(suffix)), generation_targets)
+
+net.save_weights(folder, prefix=suffix)
