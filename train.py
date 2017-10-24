@@ -10,7 +10,7 @@ n_epochs = 20
 # number of trials to repeat training
 n_trials = 5
 
-folder = "f_etas_5.0_0.01_500_inputs_7_target_nudge"
+folder = "mnist_test"
 
 if not os.path.exists(folder):
     os.makedirs(folder)
@@ -171,32 +171,33 @@ f_etas = [10.0, 0.01]
 b_etas = [0.001]
 
 # # number of units per layer (including input layer)
-n = [500, 300, 3]
+n = [784, 300, 10]
 
 # initalize array to hold losses
-losses       = np.zeros((n_trials, len(n)-1, int(n_epochs*network.n_sequences*network.sequence_length/100.0)))
-losses_2     = np.zeros((n_trials, len(n)-1, int(n_epochs*network.n_sequences*network.sequence_length/100.0)))
+losses       = np.zeros((n_trials, len(n)-1, int(n_epochs*network.n_sequences*network.sequence_length/50.0)))
+losses_2     = np.zeros((n_trials, len(n)-1, int(n_epochs*network.n_sequences*network.sequence_length/50.0)))
 avg_losses   = np.zeros((n_trials, len(n)-1, n_epochs*network.n_sequences))
 avg_losses_2 = np.zeros((n_trials, len(n)-1, n_epochs*network.n_sequences))
 errors       = np.zeros((n_trials, network.n_classes))
 diffs        = np.zeros((n_trials, network.n_classes, int(network.sequence_length/2.0)))
 
 for i in range(n_trials):
-    print("No hidden layers. Trial {:>2d}/{:>2d}. --------------------".format(i+1, n_trials))
+    print("1 hidden layer. Trial {:>2d}/{:>2d}. --------------------".format(i+1, n_trials))
 
     # create the network
     net = network.Network(n=n)
 
-    loss, loss_2, error, outputs, targets, target_times, test_outputs, test_targets, class_nums, diff, generation_outputs, generation_targets = net.train(f_etas, b_etas, n_epochs, update_b_weights=True, generate_activity=True)
+    loss, loss_2, error, outputs, targets, target_times, test_outputs, test_targets, class_nums = net.train(f_etas, b_etas, n_epochs, update_b_weights=False, generate_activity=False)
 
     losses[i] = loss
     losses_2[i] = loss_2
     errors[i] = error
-    diffs[i]  = diff
+
+    print(errors)
 
 for l in range(n_epochs*network.n_sequences):
-    avg_losses[:, :, l] = np.mean(losses[:, :, int(l*network.sequence_length/100.0):int((l+1)*network.sequence_length/100.0)], axis=-1)
-    avg_losses_2[:, :, l] = np.mean(losses_2[:, :, int(l*network.sequence_length/100.0):int((l+1)*network.sequence_length/100.0)], axis=-1)
+    avg_losses[:, :, l] = np.mean(losses[:, :, int(l*network.sequence_length/50.0):int((l+1)*network.sequence_length/50.0)], axis=-1)
+    avg_losses_2[:, :, l] = np.mean(losses_2[:, :, int(l*network.sequence_length/50.0):int((l+1)*network.sequence_length/50.0)], axis=-1)
 
 suffix = "hidden_backward_update"
 

@@ -9,13 +9,17 @@ from scipy import interpolate
 """                 Simulation parameters                     """
 # ---------------------------------------------------------------
 
-sequence_length       = 2000 # length of the input sequence to be repeated
-n_spikes_per_burst    = 10   # number of spikes in each burst
-teach_prob            = 0.05 # probability of a teaching signal being provided
-n_classes             = 10   # number of training classes to train the network on
-n_sequences_per_class = 10   # number of sequences per training class
+sequence_length            = 100  # length of the input sequence to be repeated
+n_spikes_per_burst         = 10   # number of spikes in each burst
+teach_prob                 = 0.05 # probability of a teaching signal being provided
+n_classes                  = 10   # number of training classes to train the network on
+n_sequences_per_class      = 5000 # number of sequences per training class
+n_test_sequences_per_class = 1000
 
-n_sequences = n_classes*n_sequences_per_class # total number of sequences per epoch
+n_sequences      = n_sequences_per_class*n_classes # total number of sequences per epoch
+n_test_sequences = n_test_sequences_per_class*n_classes
+
+n_in = 784
 
 use_sparse_feedback  = False # zero out a proportion of the feedback weights
 sparse_feedback_prop = 0.5   # proportion of feedback weights to set to 0
@@ -29,173 +33,37 @@ Y_range = 1.0
 # ---------------------------------------------------------------
 
 def running_mean(x, N):
-    cumsum = np.cumsum(np.insert(x, 0, 0)) 
-    return (cumsum[N:] - cumsum[:-N]) / N 
+    cumsum = np.cumsum(np.insert(x, 0, 0))
+    return (cumsum[N:] - cumsum[:-N]) / N
 
-def create_data(n_in, n_out):
-    '''
-    Generate input & target data using sine & cosine functions.
-    '''
+def load_mnist_data():
+    x_set      = np.load("x_train.npy").astype(np.float32)
+    x_test_set = x_set[:, n_sequences:n_sequences+n_test_sequences]
+    x_set      = x_set[:, :n_sequences]
+    t_set      = np.load("t_train.npy").astype(np.float32)
+    t_test_set = t_set[:, n_sequences:n_sequences+n_test_sequences]
+    t_set      = t_set[:, :n_sequences]
 
-    # full training & test set -- last n_classes examples are the test examples, one from each class
-    x_set = np.zeros((n_sequences + n_classes, n_in, sequence_length)).astype(np.float32)
-    t_set = np.zeros((n_sequences + n_classes, n_out, sequence_length)).astype(np.float32)
+    return torch.from_numpy(x_set), torch.from_numpy(t_set), torch.from_numpy(x_test_set), torch.from_numpy(t_test_set)
 
-    # canonical sequences used to generate the training & test sets -- one set of sequences for each class
-    x_class_set = np.zeros((n_classes, n_in, sequence_length)).astype(np.float32)
-    t_class_set = np.zeros((n_classes, n_out, sequence_length)).astype(np.float32)
+def get_x(k):
+    return x_set[:, k].unsqueeze_(1)
 
-    # arrays for storing randomly generated amplitudes, frequencies and phases of the canonical sequences
-    x_class_amplitudes  = np.zeros((n_classes, n_in))
-    x_class_frequencies = np.zeros((n_classes, n_in))
-    x_class_phases      = np.zeros((n_classes, n_in))
+def get_t(k):
+    return t_set[:, k].unsqueeze_(1)
 
-    # array for storing the ranomly chosen input unit pairs used to create canonical target sequences
-    t_xor_x_pairs = np.zeros((n_classes, n_out, 2)).astype(int)
+def get_test_x(k):
+    return x_test_set[:, k].unsqueeze_(1)
 
-    x = np.arange(sequence_length)
-
-    for k in range(n_classes):
-        # create canonical input sequences for this class
-        for i in range(n_in):
-            x_class_frequencies[k, i] = np.random.uniform(0.005, 0.03)
-            x_class_phases[k, i]      = np.random.uniform(0, 1)
-            x_class_amplitudes[k, i]  = np.random.uniform(0.2, 0.4)
-
-            x_class_set[k, i] = x_class_amplitudes[k, i]*np.cos(x_class_frequencies[k, i]*x + x_class_phases[k, i]) + 0.5
-
-        # create canonical target sequences for this class
-        for i in range(n_out):
-            a = np.random.randint(0, n_in)
-
-            b = np.random.randint(0, n_in)
-            while a == b:
-                b = np.random.randint(0, n_in)
-
-            t_class_set[k, i] = np.zeros(x.shape)
-            t_class_set[k, i, np.logical_or(x_class_set[k, a] > 0.5, x_class_set[k, b] > 0.5)] = 0.8
-            t_class_set[k, i, np.logical_and(x_class_set[k, a] > 0.5, x_class_set[k, b] > 0.5)] = 0.2
-            t_class_set[k, i, np.logical_and(x_class_set[k, a] <= 0.5, x_class_set[k, b] <= 0.5)] = 0.2
-
-            ind = np.arange(0, sequence_length, 5)
-            tck = interpolate.splrep(ind, t_class_set[k, i, ind], s=10)
-            ynew = interpolate.splev(np.arange(sequence_length), tck, der=0)
-            t_class_set[k, i] = ynew
-
-            t_xor_x_pairs[k, i] = (a, b)
-
-        # create n_sequences_per_class training examples from this class
-        for m in range(n_sequences_per_class):
-            index = int(k*n_sequences_per_class + m)
-            for i in range(n_in):
-                amplitude_pertubation = np.random.uniform(0.05, 0.1)*np.cos(np.random.uniform(0.005, 0.05)*x + np.random.uniform(0, 1)) + 1
-                shift_pertubation = np.random.uniform(0.01, 0.05)*np.cos(np.random.uniform(0.005, 0.05)*x + np.random.uniform(0, 1))
-                x_set[index, i] = amplitude_pertubation*x_class_set[k, i] + shift_pertubation
-                # x_set[index, i] = x_class_set[k, i]
-
-            for i in range(n_out):
-                amplitude_pertubation = np.random.uniform(0.05, 0.1)*np.cos(np.random.uniform(0.005, 0.05)*x + np.random.uniform(0, 1)) + 1
-                shift_pertubation = np.random.uniform(0.01, 0.05)*np.cos(np.random.uniform(0.005, 0.05)*x + np.random.uniform(0, 1))
-                t_set[index, i] = amplitude_pertubation*t_class_set[k, i] + shift_pertubation
-                # t_set[index, i] = t_class_set[k, i]
-
-        # create one test example from this class
-        index = int(n_classes*n_sequences_per_class + k)
-        for i in range(n_in):
-            amplitude_pertubation = np.random.uniform(0.05, 0.1)*np.cos(np.random.uniform(0.005, 0.05)*x + np.random.uniform(0, 1)) + 1
-            shift_pertubation = np.random.uniform(0.01, 0.05)*np.cos(np.random.uniform(0.005, 0.05)*x + np.random.uniform(0, 1))
-            x_set[index, i] = amplitude_pertubation*x_class_set[k, i] + shift_pertubation
-
-        for i in range(n_out):
-            amplitude_pertubation = np.random.uniform(0.05, 0.1)*np.cos(np.random.uniform(0.005, 0.05)*x + np.random.uniform(0, 1)) + 1
-            shift_pertubation = np.random.uniform(0.01, 0.05)*np.cos(np.random.uniform(0.005, 0.05)*x + np.random.uniform(0, 1))
-            t_set[index, i] = amplitude_pertubation*t_class_set[k, i] + shift_pertubation
-
-    # save dataset
-    np.save("x_class_set.npy", x_class_set)
-    np.save("t_class_set.npy", t_class_set)
-    np.save("t_xor_x_pairs.npy", t_xor_x_pairs)
-    np.save("x_set.npy", x_set)
-    np.save("t_set.npy", t_set)
-
-    for k in range(n_classes):
-        plt.figure(figsize=(15, 6))
-        plt.plot(np.arange(sequence_length), x_class_set[k, 0], "#57E964", lw=2, label="Input Unit 0")
-        plt.plot(np.arange(sequence_length), x_class_set[k, 1], "#4FF2FF", lw=2, label="Input Unit 1")
-        plt.plot(np.arange(sequence_length), t_class_set[k, 0], "#FF87E4", lw=2, label="Output Unit 0")
-        plt.legend()
-        plt.title("Class 0 Sequence Curves")
-        plt.xlabel("Timestep")
-        plt.ylabel("Activity")
-        plt.savefig("inputs_targets_{}.png".format(k))
-        plt.savefig("inputs_targets_{}.svg".format(k))
-        plt.close()
-
-    colors = ["#FF6666", "#41BFFF", "#57E964", "#FF87E4", "#4FF2FF", "#FFD061", "orange", "purple", "gray", "brown"]
-
-    plt.figure(figsize=(15, 6))
-    for k in range(min(n_classes, 3)):
-        plt.plot(np.arange(sequence_length), x_class_set[k, 0], lw=2, c=colors[k], label="Class {}".format(k))
-        for i in range(n_sequences_per_class):
-            plt.plot(np.arange(sequence_length), x_set[k*n_sequences_per_class + i, 0], lw=1, c=colors[k], linestyle='--', alpha=0.5)
-    plt.legend()
-    plt.title("Input 0 Training Sequences")
-    plt.xlabel("Timestep")
-    plt.ylabel("Activity")
-    plt.savefig("input_unit_0_classes.png")
-    plt.savefig("input_unit_0_classes.svg")
-
-    plt.figure(figsize=(15, 6))
-    for k in range(min(n_classes, 3)):
-        plt.plot(np.arange(sequence_length), t_class_set[k, 0], lw=2, c=colors[k+3], label="Class {}".format(k))
-        for i in range(n_sequences_per_class):
-            plt.plot(np.arange(sequence_length), t_set[k*n_sequences_per_class + i, 0], lw=1, c=colors[k+3], linestyle='--', alpha=0.5)
-    plt.legend()
-    plt.title("Output 0 Training Sequences")
-    plt.xlabel("Timestep")
-    plt.ylabel("Activity")
-    plt.savefig("output_unit_0_classes.png")
-    plt.savefig("output_unit_0_classes.svg")
-
-    plt.figure(figsize=(15, 6))
-    t_xor_x_pair = t_xor_x_pairs[0, 0]
-    plt.plot(np.arange(sequence_length), x_class_set[0, t_xor_x_pair[0]], lw=2, c=colors[1], label="Class {}, Input {}".format(0, t_xor_x_pair[0]))
-    for i in range(n_sequences_per_class):
-        plt.plot(np.arange(sequence_length), x_set[i, t_xor_x_pair[0]], lw=1, c=colors[1], linestyle='--', alpha=0.5)
-    plt.plot(np.arange(sequence_length), x_class_set[0, t_xor_x_pair[1]], lw=2, c=colors[2], label="Class {}, Input {}".format(0, t_xor_x_pair[1]))
-    for i in range(n_sequences_per_class):
-        plt.plot(np.arange(sequence_length), x_set[i, t_xor_x_pair[1]], lw=1, c=colors[2], linestyle='--', alpha=0.5)
-    plt.plot(np.arange(sequence_length), t_class_set[0, 0], lw=2, c=colors[3], label="Class {}, Output {}".format(0, 0))
-    for i in range(n_sequences_per_class):
-        plt.plot(np.arange(sequence_length), t_set[i, 0], lw=1, c=colors[3], linestyle='--', alpha=0.5)
-
-    plt.legend()
-    plt.title("Class 0 Training Sequences")
-    plt.xlabel("Timestep")
-    plt.ylabel("Activity")
-    plt.savefig("class_0_seqs.png")
-    plt.savefig("class_0_seqs.svg")
-
-    return torch.from_numpy(x_set), torch.from_numpy(t_set)
-
-def load_data():
-    x_set = np.load("x_set.npy")
-    t_set = np.load("t_set.npy")
-
-    return torch.from_numpy(x_set), torch.from_numpy(t_set)
-
-def get_x(k, n):
-    return x_set[k, :, n].unsqueeze_(1)
-
-def get_t(k, n):
-    return t_set[k, :, n].unsqueeze_(1)
+def get_test_t(k):
+    return t_test_set[:, k].unsqueeze_(1)
 
 # ---------------------------------------------------------------
 """                     Network class                         """
 # ---------------------------------------------------------------
 
 class Network:
-    def __init__(self, n, create_dataset=False):
+    def __init__(self, n):
         '''
         Initialize the network.
 
@@ -207,15 +75,8 @@ class Network:
         self.n = n               # layer sizes - eg. (500, 100, 10)
         self.M = len(self.n) - 1 # number of layers, not including the input layer
 
-        # create input & target data
-        try:
-            if create_dataset:
-                raise
-            self.x_set, self.t_set = load_data()
-            print("Loaded training data.")
-        except:
-            print("Creating training data.")
-            self.x_set, self.t_set = create_data(self.n[0], self.n[-1])
+        self.x_set, self.t_set, self.x_test_set, self.t_test_set = load_mnist_data()
+        print("Loaded MNIST training data.")
 
         print("Creating a network with {} layers.".format(self.M))
         print("---------------------------------")
@@ -326,44 +187,14 @@ class Network:
         self.f_etas = f_etas
         self.b_etas = b_etas
 
-        if plot_activity:
-            # set colors for plotting the output & target output of the network during training
-            colors = ["red", "blue", "green", "cyan", "orange", "purple", "brown", "magenta"]
-
-            if len(colors) < self.n[-1]:
-                raise Exception("Number of output neurons exceeds the number of defined colors for plotting.")
-
-            # create the figure
-            self.figure = plt.figure(figsize=(15, 8), facecolor='white')
-
-            # create top axis
-            self.animation_axis_top = plt.Axes(self.figure, [0.07, 0.57, 0.86, 0.36])
-            self.figure.add_axes(self.animation_axis_top)
-            self.target_lines_top = [ self.animation_axis_top.plot([], [], color=colors[i], lw=1, label='Unit {} Target'.format(i+1))[0] for i in range(self.n[-1]) ]
-            # self.input_lines_top = [ self.animation_axis_top.plot([], [], color=colors[i+3], lw=2, alpha=0.2, label='Input {}'.format(i+1))[0] for i in range(2) ]
-            self.output_lines_top = [ self.animation_axis_top.plot([], [], color=colors[i], lw=1, linestyle='--', alpha=0.5, label='Unit {} Activity'.format(i+1))[0] for i in range(self.n[-1]) ]
-            self.animation_axis_top.set_title("Start of Training")
-            self.animation_axis_top.legend()
-
-            # create bottom axis
-            self.animation_axis_bottom = plt.Axes(self.figure, [0.07, 0.07, 0.86, 0.36])
-            self.figure.add_axes(self.animation_axis_bottom)
-            self.target_lines_bottom = [ self.animation_axis_bottom.plot([], [], color=colors[i], lw=1, label='Unit {} Target'.format(i+1))[0] for i in range(self.n[-1]) ]
-            # self.input_lines_bottom = [ self.animation_axis_bottom.plot([], [], color=colors[i+3], lw=2, alpha=0.2, label='Input {}'.format(i+1))[0] for i in range(2) ]
-            self.output_lines_bottom = [ self.animation_axis_bottom.plot([], [], color=colors[i], lw=1, linestyle='--', alpha=0.5, label='Unit {} Activity'.format(i+1))[0] for i in range(self.n[-1]) ]
-            self.animation_axis_bottom.set_title("After Training")
-            self.animation_axis_bottom.set_xlabel("Timestep")
-
         # initialize counter for number of time steps at which no target is present
         no_t_count = 0
 
         # initialize array to hold average loss over each 100 time steps
         # and a counter to keep track of where we are in the avg_training_losses array
-        avg_training_losses = np.zeros((self.M, int(n_epochs*sequence_length*n_sequences/100.0)))
-        avg_training_losses_2 = np.zeros((self.M, int(n_epochs*sequence_length*n_sequences/100.0)))
+        avg_training_losses   = np.zeros((self.M, int(n_epochs*sequence_length*n_sequences/50.0)))
+        avg_training_losses_2 = np.zeros((self.M, int(n_epochs*sequence_length*n_sequences/50.0)))
         counter = 0
-
-        test_errors = np.zeros(n_classes)
 
         # initialize arrays to hold targets and outputs over time
         self.targets = np.zeros((n_epochs*sequence_length*n_sequences, self.n[-1]))
@@ -382,17 +213,24 @@ class Network:
             np.random.shuffle(seq_nums)
             for k in range(n_sequences):
                 seq_num = seq_nums[k]
-                class_nums[l*n_sequences+ k] = seq_num // n_sequences_per_class
+                # print(seq_num // n_sequences_per_class)
+
+                self.x = self.x_set[:, seq_num].unsqueeze_(1)
+                self.t = self.t_set[:, seq_num].unsqueeze_(1)
+
+                class_nums[l*n_sequences+ k] = np.argmax(self.t.numpy())
+
+                # print(np.argmax(self.t.numpy()))
+                # print(self.t)
+
+                # print(self.x.size())
+
                 for time in range(sequence_length):
                     # set previous target
                     if t is not None:
                         prev_t = t.clone()
                     else:
                         prev_t = None
-
-                    # get input & target for this time step
-                    self.x = self.x_set[seq_num, :, time].unsqueeze_(1)
-                    self.t = self.t_set[seq_num, :, time].unsqueeze_(1)
 
                     if np.random.uniform(0, 1) >= 1 - teach_prob and time >= self.M:
                         no_t = False
@@ -420,12 +258,12 @@ class Network:
                     self.targets[(l*n_sequences + k)*sequence_length + time] = self.t.numpy()[:, 0]
                     self.outputs[(l*n_sequences + k)*sequence_length + time] = self.l[-1].event_rate.numpy()[:, 0]
 
-                    if (time+1) % 100 == 0:
+                    if (time+1) % 50 == 0:
                         # compute average loss over the last 100 time steps
                         # minus those where a target wasn't present
-                        if 100 - no_t_count > 0:
-                            avg_training_losses[:, counter] /= (100 - no_t_count)
-                            avg_training_losses_2[:, counter] /= (100 - no_t_count)
+                        if 50 - no_t_count > 0:
+                            avg_training_losses[:, counter] /= (50 - no_t_count)
+                            avg_training_losses_2[:, counter] /= (50 - no_t_count)
                             if self.M > 1:
                                 print("Epoch {:>3d}, example {:>3d}, t={:>4d}. Avg. output loss: {:.10f}. Avg. last hidden loss: {:.10f}.".format(l+1, k+1, time+1, avg_training_losses_2[-1, counter], avg_training_losses[-2, counter]))
                             else:
@@ -440,18 +278,24 @@ class Network:
                         counter += 1
 
         # test the network on the test set
-        seq_nums = np.arange(n_classes) + n_sequences
+        seq_nums = np.arange(n_test_sequences)
 
-        test_targets = np.zeros((n_classes, sequence_length, self.n[-1]))
-        test_outputs = np.zeros((n_classes, sequence_length, self.n[-1]))
+        test_targets = np.zeros((sequence_length*n_test_sequences, self.n[-1]))
+        test_outputs = np.zeros((sequence_length*n_test_sequences, self.n[-1]))
 
-        for k in range(n_classes):
+        class_nums = np.zeros(n_test_sequences).astype(int)
+
+        test_errors = np.zeros(n_classes)
+
+        for k in range(n_test_sequences):
             seq_num = seq_nums[k]
-            for time in range(sequence_length):
-                # get input & target for this time step
-                self.x = self.x_set[seq_num, :, time].unsqueeze_(1)
-                self.t = self.t_set[seq_num, :, time].unsqueeze_(1)
 
+            self.x = self.x_test_set[:, seq_num].unsqueeze_(1)
+            self.t = self.t_test_set[:, seq_num].unsqueeze_(1)
+
+            class_nums[k] = np.argmax(self.t.numpy())
+
+            for time in range(sequence_length):
                 update_b_weights  = False
                 update_f_weights  = False
                 generate_activity = False
@@ -460,53 +304,24 @@ class Network:
                 self.out(self.x, None, None, time, generate_activity=generate_activity, update_b_weights=update_b_weights, update_f_weights=update_f_weights)
 
                 # record targets & outputs for this time step
-                test_targets[k, time] = self.t.numpy()[:, 0]
-                test_outputs[k, time] = self.l[-1].event_rate.numpy()[:, 0]
-
-                test_errors[k] += np.mean(np.abs(self.t.numpy()[:, 0] - self.l[-1].event_rate.numpy()[:, 0]))
+                test_targets[k*sequence_length + time] = self.t.numpy()[:, 0]
+                test_outputs[k*sequence_length + time] = self.l[-1].event_rate.numpy()[:, 0]
 
                 if (time+1) % 100 == 0:
                     print("Test example {:>3d}, t={:>4d}.".format(k+1, time+1))
 
-            test_errors[k] /= sequence_length
+            predicted_class = np.argmax(np.mean(test_outputs[k*sequence_length:(k + 1)*sequence_length], axis=0))
+            target_class = class_nums[k]
 
-        if self.generate_activity:
-            diff = np.zeros((n_classes, int(sequence_length/2.0)))
+            # print(target_class, test_targets[(k*n_test_sequences_per_class + l)*sequence_length], predicted_class, test_outputs[(k*n_test_sequences_per_class + l)*sequence_length])
 
-            seq_nums = np.arange(n_classes) + n_sequences
-            np.random.shuffle(seq_nums)
+            if predicted_class != target_class:
+                test_errors[class_nums[k]] += 1
 
-            generation_targets = np.zeros((n_classes, sequence_length, self.n[-1]))
-            generation_outputs = np.zeros((n_classes, sequence_length, self.n[-1]))
+        for k in range(n_classes):
+            test_errors[k] = 100.0*test_errors[k]/float(n_test_sequences_per_class)
 
-            for k in range(n_classes):
-                seq_num = seq_nums[k]
-                for time in range(sequence_length):
-                    # get input & target for this time step
-                    self.x = self.x_set[seq_num, :, time].unsqueeze_(1)
-                    self.t = self.t_set[seq_num, :, time].unsqueeze_(1)
-
-                    update_b_weights  = False
-                    update_f_weights  = False
-
-                    generate_activity = time >= int(sequence_length/2)
-
-                    # simulate network activity for this time step
-                    self.out(self.x, None, None, time, generate_activity=generate_activity, update_b_weights=update_b_weights, update_f_weights=update_f_weights)
-
-                    # record targets & outputs for this time step
-                    generation_targets[k, time] = self.t.numpy()[:, 0]
-                    generation_outputs[k, time] = self.l[-1].event_rate.numpy()[:, 0]
-
-                    diff[k, time - int(sequence_length/2)] = np.mean(np.abs(generation_targets[k, time] - generation_outputs[k, time]))
-
-                    if (time+1) % 100 == 0:
-                        print("Generated activity example {:>3d}, t={:>4d}.".format(k+1, time+1))
-
-        if not self.generate_activity:
-            return avg_training_losses, avg_training_losses_2, test_errors, self.outputs, self.targets, self.target_times, test_outputs, test_targets, class_nums
-        else:
-            return avg_training_losses, avg_training_losses_2, test_errors, self.outputs, self.targets, self.target_times, test_outputs, test_targets, class_nums, diff, generation_outputs, generation_targets
+        return avg_training_losses, avg_training_losses_2, test_errors, self.outputs, self.targets, self.target_times, test_outputs, test_targets, class_nums
 
     def save_weights(self, path, prefix=""):
         '''
