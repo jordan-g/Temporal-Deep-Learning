@@ -140,7 +140,7 @@ class Network:
             if time >= self.M and t is not None and update_f_weights:
                 self.l[-1].burst(self.f_etas[-1])
 
-    def train(self, f_etas, b_etas, n_epochs, plot_activity=False, weight_decay=0, update_b_weights=False, generate_activity=False, update_hidden_weights=True):
+    def train(self, f_etas, b_etas, n_epochs, plot_activity=False, weight_decay=0, update_b_weights=False, generate_activity=False, update_hidden_weights=True, print_loss=True, trial=1):
         '''
         Train the network.
 
@@ -192,8 +192,8 @@ class Network:
 
         # initialize array to hold average loss over each 100 time steps
         # and a counter to keep track of where we are in the avg_training_losses array
-        avg_training_losses   = np.zeros((self.M, int(n_epochs*sequence_length*n_sequences/50.0)))
-        avg_training_losses_2 = np.zeros((self.M, int(n_epochs*sequence_length*n_sequences/50.0)))
+        avg_training_losses   = np.zeros((self.M, int(n_epochs*sequence_length*n_sequences/100.0)))
+        avg_training_losses_2 = np.zeros((self.M, int(n_epochs*sequence_length*n_sequences/100.0)))
         counter = 0
 
         # initialize arrays to hold targets and outputs over time
@@ -258,21 +258,23 @@ class Network:
                     self.targets[(l*n_sequences + k)*sequence_length + time] = self.t.numpy()[:, 0]
                     self.outputs[(l*n_sequences + k)*sequence_length + time] = self.l[-1].event_rate.numpy()[:, 0]
 
-                    if (time+1) % 50 == 0:
+                    if (time+1) % 100 == 0:
                         # compute average loss over the last 100 time steps
                         # minus those where a target wasn't present
-                        if 50 - no_t_count > 0:
-                            avg_training_losses[:, counter] /= (50 - no_t_count)
-                            avg_training_losses_2[:, counter] /= (50 - no_t_count)
-                            if self.M > 1:
-                                print("Epoch {:>3d}, example {:>3d}, t={:>4d}. Avg. output loss: {:.10f}. Avg. last hidden loss: {:.10f}.".format(l+1, k+1, time+1, avg_training_losses_2[-1, counter], avg_training_losses[-2, counter]))
-                            else:
-                                print("Epoch {:>3d}, example {:>3d}, t={:>4d}. Avg. output loss: {:.10f}.".format(l+1, k+1, time+1, avg_training_losses_2[-1, counter]))
+                        if 100 - no_t_count > 0:
+                            avg_training_losses[:, counter] /= (100 - no_t_count)
+                            avg_training_losses_2[:, counter] /= (100 - no_t_count)
+                            if print_loss:
+                                if self.M > 1:
+                                    print("Trial {:>3d}, epoch {:>3d}, example {:>3d}, t={:>4d}. Avg. output loss: {:.10f}. Avg. last hidden loss: {:.10f}.".format(trial+1, l+1, k+1, time+1, avg_training_losses_2[-1, counter], avg_training_losses[-2, counter]))
+                                else:
+                                    print("Trial {:>3d}, epoch {:>3d}, example {:>3d}, t={:>4d}. Avg. output loss: {:.10f}.".format(trial+1, l+1, k+1, time+1, avg_training_losses_2[-1, counter]))
                         else:
-                            if self.M > 1:
-                                print("Epoch {:>3d}, example {:>3d}, t={:>4d}. Avg. output loss: {}. Avg. last hidden loss: {}.".format(l+1, k+1, time+1, "_"*12, "_"*12))
-                            else:
-                                print("Epoch {:>3d}, example {:>3d}, t={:>4d}. Avg. output loss: {}.".format(l+1, k+1, time+1, "_"*12))
+                            if print_loss:
+                                if self.M > 1:
+                                    print("Trial {:>3d}, epoch {:>3d}, example {:>3d}, t={:>4d}. Avg. output loss: {}. Avg. last hidden loss: {}.".format(trial+1, l+1, k+1, time+1, "_"*12, "_"*12))
+                                else:
+                                    print("Trial {:>3d}, epoch {:>3d}, example {:>3d}, t={:>4d}. Avg. output loss: {}.".format(trial+1, l+1, k+1, time+1, "_"*12))
                             
                         no_t_count  = 0
                         counter += 1
