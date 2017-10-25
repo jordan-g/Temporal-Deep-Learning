@@ -25,8 +25,8 @@ use_sparse_feedback  = False # zero out a proportion of the feedback weights
 sparse_feedback_prop = 0.5   # proportion of feedback weights to set to 0
 
 # uniform distribution ranges for initial weights
-W_range = 0.1
-Y_range = 1.0
+W_range = 0.01
+Y_range = 0.1
 
 # ---------------------------------------------------------------
 """                     Functions                             """
@@ -190,10 +190,10 @@ class Network:
         # initialize counter for number of time steps at which no target is present
         no_t_count = 0
 
-        # initialize array to hold average loss over each 100 time steps
+        # initialize array to hold average loss over each sequence_length time steps
         # and a counter to keep track of where we are in the avg_training_losses array
-        avg_training_losses   = np.zeros((self.M, int(n_epochs*sequence_length*n_sequences/100.0)))
-        avg_training_losses_2 = np.zeros((self.M, int(n_epochs*sequence_length*n_sequences/100.0)))
+        avg_training_losses   = np.zeros((self.M, int(n_epochs*sequence_length*n_sequences/sequence_length)))
+        avg_training_losses_2 = np.zeros((self.M, int(n_epochs*sequence_length*n_sequences/sequence_length)))
         counter = 0
 
         # initialize arrays to hold targets and outputs over time
@@ -258,12 +258,12 @@ class Network:
                     self.targets[(l*n_sequences + k)*sequence_length + time] = self.t.numpy()[:, 0]
                     self.outputs[(l*n_sequences + k)*sequence_length + time] = self.l[-1].event_rate.numpy()[:, 0]
 
-                    if (time+1) % 100 == 0:
-                        # compute average loss over the last 100 time steps
+                    if (time+1) % sequence_length == 0:
+                        # compute average loss over the last sequence_length time steps
                         # minus those where a target wasn't present
-                        if 100 - no_t_count > 0:
-                            avg_training_losses[:, counter] /= (100 - no_t_count)
-                            avg_training_losses_2[:, counter] /= (100 - no_t_count)
+                        if sequence_length - no_t_count > 0:
+                            avg_training_losses[:, counter] /= (sequence_length - no_t_count)
+                            avg_training_losses_2[:, counter] /= (sequence_length - no_t_count)
                             if print_loss:
                                 if self.M > 1:
                                     print("Trial {:>3d}, epoch {:>3d}, example {:>3d}, t={:>4d}. Avg. output loss: {:.10f}. Avg. last hidden loss: {:.10f}.".format(trial+1, l+1, k+1, time+1, avg_training_losses_2[-1, counter], avg_training_losses[-2, counter]))
@@ -309,7 +309,7 @@ class Network:
                 test_targets[k*sequence_length + time] = self.t.numpy()[:, 0]
                 test_outputs[k*sequence_length + time] = self.l[-1].event_rate.numpy()[:, 0]
 
-                if (time+1) % 100 == 0:
+                if (time+1) % sequence_length == 0:
                     print("Test example {:>3d}, t={:>4d}.".format(k+1, time+1))
 
             predicted_class = np.argmax(np.mean(test_outputs[k*sequence_length:(k + 1)*sequence_length], axis=0))

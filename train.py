@@ -8,7 +8,7 @@ import os
 n_epochs = 20
 
 # number of trials to repeat training
-n_trials = 5
+n_trials = 1
 
 folder = "mnist_test"
 
@@ -165,17 +165,17 @@ if not os.path.exists(folder):
 # ----- ONE HIDDEN LAYER, BACKWARD WEIGHT UPDATES ----- #
 
 # # feedforward learning rates
-f_etas = [10.0, 0.01]
+f_etas = [10.0, 10.0, 0.01]
 
 # feedback learning rates
-b_etas = [0.001]
+b_etas = [0.001, 0.001]
 
 # # number of units per layer (including input layer)
-n = [784, 300, 10]
+n = [784, 500, 300, 10]
 
 # initalize array to hold losses
-losses       = np.zeros((n_trials, len(n)-1, int(n_epochs*network.n_sequences*network.sequence_length/100.0)))
-losses_2     = np.zeros((n_trials, len(n)-1, int(n_epochs*network.n_sequences*network.sequence_length/100.0)))
+losses       = np.zeros((n_trials, len(n)-1, int(n_epochs*network.n_sequences)))
+losses_2     = np.zeros((n_trials, len(n)-1, int(n_epochs*network.n_sequences)))
 avg_losses   = np.zeros((n_trials, len(n)-1, n_epochs*network.n_sequences))
 avg_losses_2 = np.zeros((n_trials, len(n)-1, n_epochs*network.n_sequences))
 errors       = np.zeros((n_trials, network.n_classes))
@@ -196,8 +196,8 @@ for i in range(n_trials):
     print(errors)
 
 for l in range(n_epochs*network.n_sequences):
-    avg_losses[:, :, l] = np.mean(losses[:, :, int(l*network.sequence_length/100.0):int((l+1)*network.sequence_length/100.0)], axis=-1)
-    avg_losses_2[:, :, l] = np.mean(losses_2[:, :, int(l*network.sequence_length/100.0):int((l+1)*network.sequence_length/100.0)], axis=-1)
+    avg_losses[:, :, l] = np.mean(losses[:, :, int(l):int((l+1))], axis=-1)
+    avg_losses_2[:, :, l] = np.mean(losses_2[:, :, int(l):int((l+1))], axis=-1)
 
 suffix = ""
 
