@@ -165,7 +165,7 @@ if not os.path.exists(folder):
 # ----- ONE HIDDEN LAYER, BACKWARD WEIGHT UPDATES ----- #
 
 # # feedforward learning rates
-f_etas = [10.0, 10.0, 0.01]
+f_etas = [1.0, 0.5, 0.05]
 
 # feedback learning rates
 b_etas = [0.001, 0.001]

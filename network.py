@@ -9,9 +9,9 @@ from scipy import interpolate
 """                 Simulation parameters                     """
 # ---------------------------------------------------------------
 
-sequence_length            = 100  # length of the input sequence to be repeated
-n_spikes_per_burst         = 10   # number of spikes in each burst
-teach_prob                 = 0.05 # probability of a teaching signal being provided
+sequence_length            = 5 # length of the input sequence to be repeated
+n_spikes_per_burst         = 10  # number of spikes in each burst
+teach_prob                 = 1 # probability of a teaching signal being provided
 n_classes                  = 10   # number of training classes to train the network on
 n_sequences_per_class      = 5000 # number of sequences per training class
 n_test_sequences_per_class = 1000
@@ -232,27 +232,52 @@ class Network:
                     else:
                         prev_t = None
 
-                    if np.random.uniform(0, 1) >= 1 - teach_prob and time >= self.M:
-                        no_t = False
-                        t    = self.t
-                        self.target_times.append((l*n_sequences + k)*sequence_length + time)
+                    if teach_prob == 1:
+                        if time == self.M+1:
+                            no_t = False
+                            t    = self.t
+                            self.target_times.append((l*n_sequences + k)*sequence_length + time)
+                        else:
+                            no_t = True
+                            t    = None
+                            no_t_count += 1
                     else:
-                        no_t = True
-                        t    = None
-                        no_t_count += 1
+                        if np.random.uniform(0, 1) >= 1 - teach_prob and time >= self.M:
+                            no_t = False
+                            t    = self.t
+                            self.target_times.append((l*n_sequences + k)*sequence_length + time)
+                        else:
+                            no_t = True
+                            t    = None
+                            no_t_count += 1
 
                     update_b_weights  = self.update_b_weights
-                    update_f_weights  = t is not None or prev_t is not None
+                    # update_f_weights  = t is not None or prev_t is not None
                     generate_activity = False
+
+                    update_f_weights = True
+
+                    # print(update_f_weights)
 
                     # simulate network activity for this time step
                     self.out(self.x, t, prev_t, time, generate_activity=generate_activity, update_b_weights=update_b_weights, update_f_weights=update_f_weights)
 
                     # add the loss to average loss, only if a target was present
-                    if not no_t:
-                        for m in range(self.M):
+                    if t is not None:
+                        avg_training_losses[-1, counter] += float(self.l[-1].loss)
+                        avg_training_losses_2[-1, counter] += float(self.l[-1].loss_2)
+                    elif prev_t is not None:
+                        for m in range(self.M-1):
                             avg_training_losses[m, counter] += float(self.l[m].loss)
                             avg_training_losses_2[m, counter] += float(self.l[m].loss_2)
+
+                    # if not no_t:
+                    #     print("hello")
+                    #     for m in range(self.M):
+                    #         avg_training_losses[m, counter] += float(self.l[m].loss)
+                    #         avg_training_losses_2[m, counter] += float(self.l[m].loss_2)
+
+                    # print(self.t.numpy()[:, 0], self.l[-1].event_rate.numpy()[:, 0])
 
                     # record targets & outputs for this time step
                     self.targets[(l*n_sequences + k)*sequence_length + time] = self.t.numpy()[:, 0]
@@ -447,8 +472,8 @@ class Layer:
         self.f_input_prev = self.f_input.clone()
 
         # apply exponential smoothing to feedforward input
-        self.f_input = (self.f_input + f_input.clone())/2.0
-        # self.f_input = f_input.clone()
+        # self.f_input = (self.f_input + f_input.clone())/2.0
+        self.f_input = f_input.clone()
 
         # calculate somatic voltage
         self.h = self.W.mm(self.f_input) + self.b
@@ -519,8 +544,8 @@ class hiddenLayer(Layer):
         self.b_input_prev = self.b_input.clone()
 
         # apply exponential smoothing to feedback input
-        self.b_input = (self.b_input + b_input.clone())/2.0
-        # self.b_input = b_input.clone()
+        # self.b_input = (self.b_input + b_input.clone())/2.0
+        self.b_input = b_input.clone()
 
         self.g_prev = self.g.clone()
 
@@ -609,8 +634,8 @@ class finalLayer(Layer):
             self.target = target.clone()
 
             # push the event rate towards the target
-            self.event_rate = (self.event_rate + self.target.clone())/2.0
-            # self.event_rate = self.target.clone()
+            # self.event_rate = (self.event_rate + self.target.clone())/2.0
+            self.event_rate = self.target.clone()
 
         # update spike rate
         self.spike_rate = self.event_rate
