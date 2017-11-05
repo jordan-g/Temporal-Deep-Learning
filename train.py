@@ -5,12 +5,12 @@ import matplotlib.pyplot as plt
 import os
 
 # number of epochs of training (one epoch = one complete showing of the input sequence)
-n_epochs = 20
+n_epochs = 50
 
 # number of trials to repeat training
-n_trials = 5
+n_trials = 1
 
-folder = "f_etas_5.0_0.01_500_inputs_7_target_nudge"
+folder = "testing"
 
 if not os.path.exists(folder):
     os.makedirs(folder)
@@ -164,14 +164,158 @@ if not os.path.exists(folder):
 
 # ----- ONE HIDDEN LAYER, BACKWARD WEIGHT UPDATES ----- #
 
+# # # feedforward learning rates
+# f_etas = [0.01]
+
+# # feedback learning rates
+# b_etas = [0.001, 0.001, 0.001]
+
+# # # number of units per layer (including input layer)
+# n = [500, 3]
+
+# # initalize array to hold losses
+# losses       = np.zeros((n_trials, len(n)-1, int(n_epochs*network.n_sequences*network.sequence_length/100.0)))
+# losses_2     = np.zeros((n_trials, len(n)-1, int(n_epochs*network.n_sequences*network.sequence_length/100.0)))
+# avg_losses   = np.zeros((n_trials, len(n)-1, n_epochs*network.n_sequences))
+# avg_losses_2 = np.zeros((n_trials, len(n)-1, n_epochs*network.n_sequences))
+# errors       = np.zeros((n_trials, network.n_classes))
+
+# for i in range(n_trials):
+#     print("No hidden layers. Trial {:>2d}/{:>2d}. --------------------".format(i+1, n_trials))
+
+#     # create the network
+#     net = network.Network(n=n, create_dataset=False)
+
+#     loss, loss_2, error, outputs, targets, target_times, test_outputs, test_targets, class_nums = net.train(f_etas, b_etas, n_epochs, update_b_weights=False, generate_activity=False)
+
+#     losses[i] = loss
+#     losses_2[i] = loss_2
+#     errors[i] = error
+
+# for l in range(n_epochs*network.n_sequences):
+#     avg_losses[:, :, l] = np.mean(losses[:, :, int(l*network.sequence_length/100.0):int((l+1)*network.sequence_length/100.0)], axis=-1)
+#     avg_losses_2[:, :, l] = np.mean(losses_2[:, :, int(l*network.sequence_length/100.0):int((l+1)*network.sequence_length/100.0)], axis=-1)
+
+# suffix = "0_hidden"
+
+# np.save(os.path.join(folder, "losses_{}.npy".format(suffix)), losses)
+# np.save(os.path.join(folder, "avg_losses_{}.npy".format(suffix)), avg_losses)
+# np.save(os.path.join(folder, "losses_2_{}.npy".format(suffix)), losses_2)
+# np.save(os.path.join(folder, "avg_losses_2_{}.npy".format(suffix)), avg_losses_2)
+# np.save(os.path.join(folder, "errors_{}.npy".format(suffix)), errors)
+# np.save(os.path.join(folder, "outputs_{}.npy".format(suffix)), outputs)
+# np.save(os.path.join(folder, "targets_{}.npy".format(suffix)), targets)
+# np.save(os.path.join(folder, "target_times_{}.npy".format(suffix)), target_times)
+# np.save(os.path.join(folder, "test_outputs_{}.npy".format(suffix)), test_outputs)
+# np.save(os.path.join(folder, "test_targets_{}.npy".format(suffix)), test_targets)
+# np.save(os.path.join(folder, "class_nums_{}.npy".format(suffix)), class_nums)
+
+# # ----- ONE HIDDEN LAYER, BACKWARD WEIGHT UPDATES ----- #
+
+# # # feedforward learning rates
+# f_etas = [5.0, 0.01]
+
+# # feedback learning rates
+# b_etas = [0.001, 0.001, 0.001]
+
+# # # number of units per layer (including input layer)
+# n = [500, 300, 3]
+
+# # initalize array to hold losses
+# losses       = np.zeros((n_trials, len(n)-1, int(n_epochs*network.n_sequences*network.sequence_length/100.0)))
+# losses_2     = np.zeros((n_trials, len(n)-1, int(n_epochs*network.n_sequences*network.sequence_length/100.0)))
+# avg_losses   = np.zeros((n_trials, len(n)-1, n_epochs*network.n_sequences))
+# avg_losses_2 = np.zeros((n_trials, len(n)-1, n_epochs*network.n_sequences))
+# errors       = np.zeros((n_trials, network.n_classes))
+
+# for i in range(n_trials):
+#     print("No hidden layers. Trial {:>2d}/{:>2d}. --------------------".format(i+1, n_trials))
+
+#     # create the network
+#     net = network.Network(n=n, create_dataset=False)
+
+#     loss, loss_2, error, outputs, targets, target_times, test_outputs, test_targets, class_nums = net.train(f_etas, b_etas, n_epochs, update_b_weights=False, generate_activity=False)
+
+#     losses[i] = loss
+#     losses_2[i] = loss_2
+#     errors[i] = error
+
+# for l in range(n_epochs*network.n_sequences):
+#     avg_losses[:, :, l] = np.mean(losses[:, :, int(l*network.sequence_length/100.0):int((l+1)*network.sequence_length/100.0)], axis=-1)
+#     avg_losses_2[:, :, l] = np.mean(losses_2[:, :, int(l*network.sequence_length/100.0):int((l+1)*network.sequence_length/100.0)], axis=-1)
+
+# suffix = "1_hidden"
+
+# np.save(os.path.join(folder, "losses_{}.npy".format(suffix)), losses)
+# np.save(os.path.join(folder, "avg_losses_{}.npy".format(suffix)), avg_losses)
+# np.save(os.path.join(folder, "losses_2_{}.npy".format(suffix)), losses_2)
+# np.save(os.path.join(folder, "avg_losses_2_{}.npy".format(suffix)), avg_losses_2)
+# np.save(os.path.join(folder, "errors_{}.npy".format(suffix)), errors)
+# np.save(os.path.join(folder, "outputs_{}.npy".format(suffix)), outputs)
+# np.save(os.path.join(folder, "targets_{}.npy".format(suffix)), targets)
+# np.save(os.path.join(folder, "target_times_{}.npy".format(suffix)), target_times)
+# np.save(os.path.join(folder, "test_outputs_{}.npy".format(suffix)), test_outputs)
+# np.save(os.path.join(folder, "test_targets_{}.npy".format(suffix)), test_targets)
+# np.save(os.path.join(folder, "class_nums_{}.npy".format(suffix)), class_nums)
+
+# # ----- ONE HIDDEN LAYER, BACKWARD WEIGHT UPDATES ----- #
+
+# # # feedforward learning rates
+# f_etas = [5.0, 5.0, 0.01]
+
+# # feedback learning rates
+# b_etas = [0.001, 0.001, 0.001]
+
+# # # number of units per layer (including input layer)
+# n = [500, 300, 200, 3]
+
+# # initalize array to hold losses
+# losses       = np.zeros((n_trials, len(n)-1, int(n_epochs*network.n_sequences*network.sequence_length/100.0)))
+# losses_2     = np.zeros((n_trials, len(n)-1, int(n_epochs*network.n_sequences*network.sequence_length/100.0)))
+# avg_losses   = np.zeros((n_trials, len(n)-1, n_epochs*network.n_sequences))
+# avg_losses_2 = np.zeros((n_trials, len(n)-1, n_epochs*network.n_sequences))
+# errors       = np.zeros((n_trials, network.n_classes))
+
+# for i in range(n_trials):
+#     print("No hidden layers. Trial {:>2d}/{:>2d}. --------------------".format(i+1, n_trials))
+
+#     # create the network
+#     net = network.Network(n=n, create_dataset=False)
+
+#     loss, loss_2, error, outputs, targets, target_times, test_outputs, test_targets, class_nums = net.train(f_etas, b_etas, n_epochs, update_b_weights=False, generate_activity=False)
+
+#     losses[i] = loss
+#     losses_2[i] = loss_2
+#     errors[i] = error
+
+# for l in range(n_epochs*network.n_sequences):
+#     avg_losses[:, :, l] = np.mean(losses[:, :, int(l*network.sequence_length/100.0):int((l+1)*network.sequence_length/100.0)], axis=-1)
+#     avg_losses_2[:, :, l] = np.mean(losses_2[:, :, int(l*network.sequence_length/100.0):int((l+1)*network.sequence_length/100.0)], axis=-1)
+
+# suffix = "2_hidden"
+
+# np.save(os.path.join(folder, "losses_{}.npy".format(suffix)), losses)
+# np.save(os.path.join(folder, "avg_losses_{}.npy".format(suffix)), avg_losses)
+# np.save(os.path.join(folder, "losses_2_{}.npy".format(suffix)), losses_2)
+# np.save(os.path.join(folder, "avg_losses_2_{}.npy".format(suffix)), avg_losses_2)
+# np.save(os.path.join(folder, "errors_{}.npy".format(suffix)), errors)
+# np.save(os.path.join(folder, "outputs_{}.npy".format(suffix)), outputs)
+# np.save(os.path.join(folder, "targets_{}.npy".format(suffix)), targets)
+# np.save(os.path.join(folder, "target_times_{}.npy".format(suffix)), target_times)
+# np.save(os.path.join(folder, "test_outputs_{}.npy".format(suffix)), test_outputs)
+# np.save(os.path.join(folder, "test_targets_{}.npy".format(suffix)), test_targets)
+# np.save(os.path.join(folder, "class_nums_{}.npy".format(suffix)), class_nums)
+
+# ----- ONE HIDDEN LAYER, BACKWARD WEIGHT UPDATES ----- #
+
 # # feedforward learning rates
-f_etas = [10.0, 0.01]
+f_etas = [1, 1, 1, 0.01]
 
 # feedback learning rates
-b_etas = [0.001]
+b_etas = [0.001, 0.001, 0.001]
 
 # # number of units per layer (including input layer)
-n = [500, 300, 3]
+n = [500, 300, 200, 100, 3]
 
 # initalize array to hold losses
 losses       = np.zeros((n_trials, len(n)-1, int(n_epochs*network.n_sequences*network.sequence_length/100.0)))
@@ -179,26 +323,24 @@ losses_2     = np.zeros((n_trials, len(n)-1, int(n_epochs*network.n_sequences*ne
 avg_losses   = np.zeros((n_trials, len(n)-1, n_epochs*network.n_sequences))
 avg_losses_2 = np.zeros((n_trials, len(n)-1, n_epochs*network.n_sequences))
 errors       = np.zeros((n_trials, network.n_classes))
-diffs        = np.zeros((n_trials, network.n_classes, int(network.sequence_length/2.0)))
 
 for i in range(n_trials):
     print("No hidden layers. Trial {:>2d}/{:>2d}. --------------------".format(i+1, n_trials))
 
     # create the network
-    net = network.Network(n=n)
+    net = network.Network(n=n, create_dataset=False)
 
-    loss, loss_2, error, outputs, targets, target_times, test_outputs, test_targets, class_nums, diff, generation_outputs, generation_targets = net.train(f_etas, b_etas, n_epochs, update_b_weights=True, generate_activity=True)
+    loss, loss_2, error, outputs, targets, target_times, test_outputs, test_targets, class_nums = net.train(f_etas, b_etas, n_epochs, update_b_weights=False, generate_activity=False)
 
     losses[i] = loss
     losses_2[i] = loss_2
     errors[i] = error
-    diffs[i]  = diff
 
 for l in range(n_epochs*network.n_sequences):
     avg_losses[:, :, l] = np.mean(losses[:, :, int(l*network.sequence_length/100.0):int((l+1)*network.sequence_length/100.0)], axis=-1)
     avg_losses_2[:, :, l] = np.mean(losses_2[:, :, int(l*network.sequence_length/100.0):int((l+1)*network.sequence_length/100.0)], axis=-1)
 
-suffix = "hidden_backward_update"
+suffix = "3_hidden"
 
 np.save(os.path.join(folder, "losses_{}.npy".format(suffix)), losses)
 np.save(os.path.join(folder, "avg_losses_{}.npy".format(suffix)), avg_losses)
@@ -211,6 +353,3 @@ np.save(os.path.join(folder, "target_times_{}.npy".format(suffix)), target_times
 np.save(os.path.join(folder, "test_outputs_{}.npy".format(suffix)), test_outputs)
 np.save(os.path.join(folder, "test_targets_{}.npy".format(suffix)), test_targets)
 np.save(os.path.join(folder, "class_nums_{}.npy".format(suffix)), class_nums)
-np.save(os.path.join(folder, "diffs_{}.npy".format(suffix)), diffs)
-np.save(os.path.join(folder, "generation_outputs_{}.npy".format(suffix)), generation_outputs)
-np.save(os.path.join(folder, "generation_targets_{}.npy".format(suffix)), generation_targets)
