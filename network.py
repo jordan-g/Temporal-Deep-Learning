@@ -750,7 +750,7 @@ class hiddenLayer(Layer):
         self.burst_prob_prev = self.burst_prob.clone()
 
         # update burst probability
-        self.burst_prob = self.g
+        self.burst_prob = torch.sigmoid(self.g)
 
         # self.burst_prob[self.burst_prob > 1] = 1
         # self.burst_prob[self.burst_prob < 0] = 0
