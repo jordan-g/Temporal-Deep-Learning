@@ -5,9 +5,10 @@ import matplotlib.pyplot as plt
 import os
 
 # number of epochs of training (one epoch = one complete showing of the input sequence)
-n_epochs = 100
+n_epochs = 50
 
 # weight_decay = 0.001
+weight_decay = 0
 
 # number of trials to repeat training
 n_trials = 1
@@ -57,9 +58,9 @@ for i in range(len(n_list)):
     np.save(os.path.join(folder, "losses_2_{}.npy".format(suffix)), losses_2)
     np.save(os.path.join(folder, "avg_losses_2_{}.npy".format(suffix)), avg_losses_2)
     np.save(os.path.join(folder, "errors_{}.npy".format(suffix)), errors)
-    np.save(os.path.join(folder, "outputs_{}.npy".format(suffix)), outputs)
-    np.save(os.path.join(folder, "targets_{}.npy".format(suffix)), targets)
-    np.save(os.path.join(folder, "target_times_{}.npy".format(suffix)), target_times)
-    np.save(os.path.join(folder, "test_outputs_{}.npy".format(suffix)), test_outputs)
-    np.save(os.path.join(folder, "test_targets_{}.npy".format(suffix)), test_targets)
+    # np.save(os.path.join(folder, "outputs_{}.npy".format(suffix)), outputs)
+    # np.save(os.path.join(folder, "targets_{}.npy".format(suffix)), targets)
+    # np.save(os.path.join(folder, "target_times_{}.npy".format(suffix)), target_times)
+    # np.save(os.path.join(folder, "test_outputs_{}.npy".format(suffix)), test_outputs)
+    # np.save(os.path.join(folder, "test_targets_{}.npy".format(suffix)), test_targets)
     np.save(os.path.join(folder, "class_nums_{}.npy".format(suffix)), class_nums)

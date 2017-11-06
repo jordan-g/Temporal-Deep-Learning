@@ -9,7 +9,7 @@ from scipy import interpolate
 """                 Simulation parameters                     """
 # ---------------------------------------------------------------
 
-sequence_length            = 100  # length of the input sequence to be repeated
+sequence_length            = 10   # length of the input sequence to be repeated
 n_spikes_per_burst         = 10   # number of spikes in each burst
 teach_prob                 = 0.5  # probability of a teaching signal being provided
 n_classes                  = 10   # number of training classes to train the network on
