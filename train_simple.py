@@ -4,6 +4,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 import utils
+import time
+import datetime
 
 def train(n_epochs, f_etas, n_hidden_units, W_range, Y_range, folder, suffix="", n_trials=1, dataset="MNIST"):
     if dataset == "MNIST":
@@ -38,6 +40,15 @@ def train(n_epochs, f_etas, n_hidden_units, W_range, Y_range, folder, suffix="",
     if not os.path.exists(folder):
         os.makedirs(folder)
 
+    with open(os.path.join(folder, "params.txt"), "a+") as f:
+        f.write("Simulation run @ {}\n".format(datetime.datetime.now().strftime("%I:%M%p on %B %d, %Y")))
+        f.write("Number of epochs: {}\n".format(n_epochs))
+        f.write("Feedforward learning rates: {}\n".format(f_etas))
+        f.write("Number of units in each layer: {}\n".format(n_units))
+        f.write("W range: {}\n".format(W_range))
+        f.write("Y range: {}\n".format(Y_range))
+        f.write("Number of trials: {}\n\n".format(n_trials))
+
     # initialize recording arrays
     losses = np.zeros((n_trials, n_layers, n_epochs*n_examples))
     errors = np.zeros((n_trials, n_epochs))
@@ -54,6 +65,8 @@ def train(n_epochs, f_etas, n_hidden_units, W_range, Y_range, folder, suffix="",
 
         # train the network
         for epoch_num in range(n_epochs):
+            start_time = time.time()
+
             # shuffle which examples to show
             np.random.shuffle(example_indices)
 
@@ -108,6 +121,10 @@ def train(n_epochs, f_etas, n_hidden_units, W_range, Y_range, folder, suffix="",
                 np.save(os.path.join(folder, "trial_{}_f_biases_layer_{}{}.npy".format(trial_num, layer_num, "_"*(len(suffix)>0) + suffix)), net.layers[layer_num].b)
                 if layer_num != n_layers-1:
                     np.save(os.path.join(folder, "trial_{}_b_weights_layer_{}{}.npy".format(trial_num, layer_num, "_"*(len(suffix)>0) + suffix)), net.layers[layer_num].Y)
+
+            end_time = time.time()
+
+            print("Total time for this epoch: {}s.".format(end_time - start_time))
 
 if __name__ == "__main__":
     # number of epochs of training

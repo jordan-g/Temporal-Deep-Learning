@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import os
 import utils
 import time
+import datetime
 
 def train(n_epochs, f_etas, n_hidden_units, W_range, Y_range, folder, suffix="", n_trials=1, dataset="MNIST"):
     # number of timesteps per example
@@ -41,6 +42,15 @@ def train(n_epochs, f_etas, n_hidden_units, W_range, Y_range, folder, suffix="",
 
     if not os.path.exists(folder):
         os.makedirs(folder)
+
+    with open(os.path.join(folder, "params.txt"), "a+") as f:
+        f.write("Simulation run @ {}\n".format(datetime.datetime.now().strftime("%I:%M%p on %B %d, %Y")))
+        f.write("Number of epochs: {}\n".format(n_epochs))
+        f.write("Feedforward learning rates: {}\n".format(f_etas))
+        f.write("Number of units in each layer: {}\n".format(n_units))
+        f.write("W range: {}\n".format(W_range))
+        f.write("Y range: {}\n".format(Y_range))
+        f.write("Number of trials: {}\n\n".format(n_trials))
 
     # initialize recording arrays
     losses = np.zeros((n_trials, n_layers, n_epochs*n_examples))
