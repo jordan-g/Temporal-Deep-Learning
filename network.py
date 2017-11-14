@@ -14,12 +14,15 @@ class Network:
         # initialize layers list
         self.layers = []
 
-        for layer_num in range(self.n_layers-1):
-            if layer_num == 0:
-                self.layers.append(hiddenLayer(self, layer_num, size=self.n[layer_num], f_input_size=n_in, b_input_size=self.n[-1], W_range=W_range, Y_range=Y_range))
-            else:
-                self.layers.append(hiddenLayer(self, layer_num, size=self.n[layer_num], f_input_size=self.n[layer_num-1], b_input_size=self.n[-1], W_range=W_range, Y_range=Y_range))
-        self.layers.append(outputLayer(self, self.n_layers-1, size=self.n[-1], f_input_size=self.n[-2], W_range=W_range))
+        if self.n_layers == 1:
+            self.layers.append(outputLayer(self, 0, size=self.n[0], f_input_size=n_in, W_range=W_range))
+        else:
+            for layer_num in range(self.n_layers-1):
+                if layer_num == 0:
+                    self.layers.append(hiddenLayer(self, layer_num, size=self.n[layer_num], f_input_size=n_in, b_input_size=self.n[-1], W_range=W_range, Y_range=Y_range))
+                else:
+                    self.layers.append(hiddenLayer(self, layer_num, size=self.n[layer_num], f_input_size=self.n[layer_num-1], b_input_size=self.n[-1], W_range=W_range, Y_range=Y_range))
+            self.layers.append(outputLayer(self, self.n_layers-1, size=self.n[-1], f_input_size=self.n[-2], W_range=W_range))
 
     def forward(self, x_prev, t):
         if self.n_layers == 1:
