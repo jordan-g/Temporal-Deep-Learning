@@ -1,15 +1,11 @@
-import network
+import network_simple as network
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
 import os
 import utils
-import time
 
 def train(n_epochs, f_etas, n_hidden_units, W_range, Y_range, folder, suffix="", n_trials=1, dataset="MNIST"):
-    # number of timesteps per example
-    timesteps_per_example = 6
-
     if dataset == "MNIST":
         # number of input & output neurons
         n_in  = 784
@@ -58,8 +54,6 @@ def train(n_epochs, f_etas, n_hidden_units, W_range, Y_range, folder, suffix="",
 
         # train the network
         for epoch_num in range(n_epochs):
-            start_time = time.time()
-
             # shuffle which examples to show
             np.random.shuffle(example_indices)
 
@@ -70,23 +64,11 @@ def train(n_epochs, f_etas, n_hidden_units, W_range, Y_range, folder, suffix="",
                 x = x_set[:, example_index]
                 t = t_set[:, example_index]
 
-                for timestep in range(timesteps_per_example):
-                    update_final_weights  = timestep in (2, 4)
-                    update_hidden_weights = timestep in (3, 5)
+                # do a forward pass
+                net.forward(x)
 
-                    # do a forward pass
-                    if update_final_weights:
-                        net.forward(x, t)
-                    else:
-                        net.forward(x, None)
-
-                    # do a backward pass (with weight updates) and record the loss at each layer
-                    tentative_losses = net.backward(t, f_etas, update_final_weights=update_final_weights, update_hidden_weights=update_hidden_weights)
-
-                    if update_final_weights:
-                        losses[trial_num, -1, epoch_num*n_examples + example_num] = tentative_losses[-1]
-                    if update_hidden_weights:
-                        losses[trial_num, :-1, epoch_num*n_examples + example_num] = tentative_losses[:-1]
+                # do a backward pass (with weight updates) and record the loss at each layer
+                losses[trial_num, :, epoch_num*n_examples + example_num] = net.backward(x, t, f_etas)
 
                 # print progress every 1000 examples
                 if (example_num+1) % 1000 == 0:
@@ -102,9 +84,8 @@ def train(n_epochs, f_etas, n_hidden_units, W_range, Y_range, folder, suffix="",
                 x = x_test_set[:, test_example_index]
                 t = t_test_set[:, test_example_index]
 
-                for timestep in range(3):
-                    # do a forward pass
-                    net.forward(x, None)
+                # do a forward pass
+                net.forward(x)
 
                 # get the predicted & target class
                 predicted_class = np.argmax(net.layers[-1].event_rate.numpy())
@@ -128,10 +109,6 @@ def train(n_epochs, f_etas, n_hidden_units, W_range, Y_range, folder, suffix="",
                 if layer_num != n_layers-1:
                     np.save(os.path.join(folder, "trial_{}_b_weights_layer_{}{}.npy".format(trial_num, layer_num, "_"*(len(suffix)>0) + suffix)), net.layers[layer_num].Y)
 
-            end_time = time.time()
-
-            print("Total time for this epoch: {}s.".format(end_time - start_time))
-
 if __name__ == "__main__":
     # number of epochs of training
     n_epochs = 100
@@ -147,7 +124,7 @@ if __name__ == "__main__":
     n_hidden_units = [500]
 
     # folder in which to save results
-    folder = "mnist_testing"
+    folder = "mnist_testing_simple"
 
     # feedforward learning rates
     f_etas = [0.1, 0.1]
