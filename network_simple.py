@@ -7,7 +7,7 @@ import os
 from scipy import interpolate
 
 class Network:
-    def __init__(self, n, n_in, W_range, Y_range):
+    def __init__(self, n, n_in, W_range, Y_range, cuda=False):
         self.n        = n           # layer sizes - eg. (500, 100, 10)
         self.n_layers = len(self.n) # number of layers
 
@@ -15,22 +15,25 @@ class Network:
         self.layers = []
 
         if self.n_layers == 1:
-            self.layers.append(outputLayer(self, 0, size=self.n[0], f_input_size=n_in, W_range=W_range))
+            self.layers.append(outputLayer(self, 0, size=self.n[0], f_input_size=n_in, W_range=W_range, cuda=cuda))
         else:
             for layer_num in range(self.n_layers-1):
                 if layer_num == 0:
-                    self.layers.append(hiddenLayer(self, layer_num, size=self.n[layer_num], f_input_size=n_in, b_input_size=self.n[-1], W_range=W_range, Y_range=Y_range))
+                    self.layers.append(hiddenLayer(self, layer_num, size=self.n[layer_num], f_input_size=n_in, b_input_size=self.n[-1], W_range=W_range, Y_range=Y_range, cuda=cuda))
                 else:
-                    self.layers.append(hiddenLayer(self, layer_num, size=self.n[layer_num], f_input_size=self.n[layer_num-1], b_input_size=self.n[-1], W_range=W_range, Y_range=Y_range))
-            self.layers.append(outputLayer(self, self.n_layers-1, size=self.n[-1], f_input_size=self.n[-2], W_range=W_range))
+                    self.layers.append(hiddenLayer(self, layer_num, size=self.n[layer_num], f_input_size=self.n[layer_num-1], b_input_size=self.n[-1], W_range=W_range, Y_range=Y_range, cuda=cuda))
+            self.layers.append(outputLayer(self, self.n_layers-1, size=self.n[-1], f_input_size=self.n[-2], W_range=W_range, cuda=cuda))
 
     def forward(self, x):
-        for layer_num in range(self.n_layers-1):
-            if layer_num == 0:
-                self.layers[0].forward(x)
-            else:
-                self.layers[layer_num].forward(self.layers[layer_num-1].event_rate)
-        self.layers[-1].forward(self.layers[-2].event_rate)
+        if self.n_layers == 1:
+            self.layers[0].forward(x)
+        else:
+            for layer_num in range(self.n_layers-1):
+                if layer_num == 0:
+                    self.layers[0].forward(x)
+                else:
+                    self.layers[layer_num].forward(self.layers[layer_num-1].event_rate)
+            self.layers[-1].forward(self.layers[-2].event_rate)
 
     def backward(self, x, t, f_etas):
         losses = np.zeros(self.n_layers)
@@ -44,7 +47,7 @@ class Network:
         return losses
 
 class hiddenLayer:
-    def __init__(self, net, layer_num, size, f_input_size, b_input_size, W_range, Y_range):
+    def __init__(self, net, layer_num, size, f_input_size, b_input_size, W_range, Y_range, cuda=False):
         self.net          = net
         self.layer_num    = layer_num
         self.size         = size
@@ -57,6 +60,11 @@ class hiddenLayer:
 
         # initialize feedback weights
         self.Y = torch.from_numpy(Y_range*np.random.uniform(-1, 1, size=(self.size, self.b_input_size)).astype(np.float32))
+
+        if cuda:
+            self.W          = self.W.cuda()
+            self.b          = self.b.cuda()
+            self.Y          = self.Y.cuda()
 
     def forward(self, f_input):
         self.f_input = f_input
@@ -80,7 +88,7 @@ class hiddenLayer:
         return loss
 
 class outputLayer:
-    def __init__(self, net, layer_num, size, f_input_size, W_range):
+    def __init__(self, net, layer_num, size, f_input_size, W_range, cuda=False):
         self.net          = net
         self.layer_num    = layer_num
         self.size         = size
@@ -89,6 +97,10 @@ class outputLayer:
         # initialize feedforward weights & biases
         self.W = torch.from_numpy(W_range*np.random.uniform(-1, 1, size=(self.size, self.f_input_size)).astype(np.float32))
         self.b = torch.from_numpy(np.zeros(self.size).astype(np.float32))
+
+        if cuda:
+            self.W          = self.W.cuda()
+            self.b          = self.b.cuda()
 
     def forward(self, f_input):
         self.f_input = f_input
