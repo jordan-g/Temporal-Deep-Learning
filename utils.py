@@ -34,9 +34,9 @@ def load_cifar10_data(n_examples, n_test_examples, validation=True, cuda=False):
         data_batches.append(dictionary[b'data'])
         labels += dictionary[b'labels']
 
-    x_set = np.concatenate(data_batches, axis=0).T.astype(np.float32)
-    t_set = np.zeros((10, n_examples)).astype(np.float32)
-    for i in range(n_examples):
+    x_set = np.concatenate(data_batches, axis=0).T.astype(np.float32)/255.0
+    t_set = np.zeros((10, len(labels))).astype(np.float32)
+    for i in range(len(labels)):
         t_set[labels[i], i] = 1
 
     if validation:
@@ -45,12 +45,13 @@ def load_cifar10_data(n_examples, n_test_examples, validation=True, cuda=False):
     else:
         dictionary = unpickle("cifar-10/test_batch")
         labels = dictionary[b'labels']
-        x_test_set = dictionary[b'data'].T.astype(np.float32)[:n_test_examples]
+        x_test_set = dictionary[b'data'].T.astype(np.float32)[:, :n_test_examples]/255.0
         t_test_set = np.zeros((10, n_test_examples)).astype(np.float32)
         for i in range(n_test_examples):
             t_test_set[labels[i], i] = 1
 
     x_set = x_set[:, :n_examples]
+    t_set = t_set[:, :n_examples]
 
     if cuda:
         return torch.from_numpy(x_set).cuda(), torch.from_numpy(t_set).cuda(), torch.from_numpy(x_test_set).cuda(), torch.from_numpy(t_test_set).cuda()

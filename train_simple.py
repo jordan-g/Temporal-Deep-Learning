@@ -34,7 +34,7 @@ def test(net, x_test_set, t_test_set, n_test_examples, n_layers, trial_num, epoc
 
     return 100.0*error/n_test_examples
 
-def train(n_epochs, f_etas, n_hidden_units, W_range, Y_range, folder, suffix="", n_trials=1, validation=True, dataset="MNIST", cuda=False):
+def train(n_epochs, f_etas, n_hidden_units, W_range, Y_range, folder, suffix="", n_trials=1, validation=True, dataset="MNIST", cuda=False, x_set=None, t_set=None, x_test_set=None, t_test_set=None):
     if dataset == "MNIST":
         # number of input & output neurons
         n_in  = 784
@@ -49,7 +49,8 @@ def train(n_epochs, f_etas, n_hidden_units, W_range, Y_range, folder, suffix="",
             n_test_examples = 10000
 
         # load MNIST data
-        x_set, t_set, x_test_set, t_test_set = utils.load_mnist_data(n_examples, n_test_examples, validation=validation, cuda=cuda)
+        if x_set is None:
+            x_set, t_set, x_test_set, t_test_set = utils.load_mnist_data(n_examples, n_test_examples, validation=validation, cuda=cuda)
     elif dataset == "CIFAR10":
         n_in  = 3072
         n_out = 10
@@ -63,7 +64,8 @@ def train(n_epochs, f_etas, n_hidden_units, W_range, Y_range, folder, suffix="",
             n_test_examples = 10000
 
         # load CIFAR10 data
-        x_set, t_set, x_test_set, t_test_set = utils.load_cifar10_data(n_examples, n_test_examples, validation=validation, cuda=cuda)
+        if x_set is None:
+            x_set, t_set, x_test_set, t_test_set = utils.load_cifar10_data(n_examples, n_test_examples, validation=validation, cuda=cuda)
 
     n_units = n_hidden_units + [n_out]
 
@@ -98,7 +100,8 @@ def train(n_epochs, f_etas, n_hidden_units, W_range, Y_range, folder, suffix="",
         example_indices = np.arange(n_examples)
 
         # calculate the initial test error as a percentage
-        errors[trial_num, 0] = test(net, x_test_set, t_test_set, n_test_examples, n_layers, trial_num, 0)
+        # errors[trial_num, 0] = test(net, x_test_set, t_test_set, n_test_examples, n_layers, trial_num, 0)
+        errors[trial_num, 0] = test(net, x_set[:, :n_test_examples], t_set[:, :n_test_examples], n_test_examples, n_layers, trial_num, 0)
 
         # print test error
         print("Initial test error: {}.".format(errors[trial_num, 0]))
@@ -139,7 +142,8 @@ def train(n_epochs, f_etas, n_hidden_units, W_range, Y_range, folder, suffix="",
                         print("{}Trial {:>3d}, epoch {:>3d}, example {:>5d}. Avg. output loss: {:.10f}.".format(suffix + ". "*(len(suffix)>0), trial_num+1, epoch_num+1, example_num+1, np.mean(losses[trial_num, -1, epoch_num*n_examples + example_num - 999:epoch_num*n_examples + example_num])))
 
             # calculate the test error as a percentage
-            errors[trial_num, epoch_num+1] = test(net, x_test_set, t_test_set, n_test_examples, n_layers, trial_num, epoch_num+1)
+            # errors[trial_num, epoch_num+1] = test(net, x_test_set, t_test_set, n_test_examples, n_layers, trial_num, epoch_num+1)
+            errors[trial_num, epoch_num+1] = test(net, x_set[:, :n_test_examples], t_set[:, :n_test_examples], n_test_examples, n_layers, trial_num, epoch_num+1)
 
             # print test error
             print("Epoch {} test error: {}.".format(epoch_num+1, errors[trial_num, epoch_num+1]))

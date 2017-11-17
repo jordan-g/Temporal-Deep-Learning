@@ -21,7 +21,7 @@ suffix         = "0_hidden" # suffix to append to files
 
 train(n_epochs, f_etas, n_hidden_units, W_range, Y_range, folder, n_trials=n_trials, validation=False, suffix=suffix, cuda=True)
 
-# # --- Train with 1 hidden layer --- #
+# --- Train with 1 hidden layer --- #
 
 n_hidden_units = [500]
 f_etas         = [0.1, 0.1]
