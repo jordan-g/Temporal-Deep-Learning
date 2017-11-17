@@ -36,8 +36,12 @@ def plot_test_errors(folder, suffixes, trial_num=0, save=False):
     plt.xlabel("Epoch #")
     plt.ylabel("Test error (%)")
     plt.yscale('log')
-    plt.ylim(1, 100)
-    plt.xlim(0, 50)
+
+    if np.amin(min_errors_list) > 10:
+        plt.ylim(10, 100)
+    else:
+        plt.ylim(1, 100)
+    plt.xlim(0, mean_errors_list[0].shape[0])
     plt.legend()
 
     if save:

@@ -34,7 +34,11 @@ def test(net, x_test_set, t_test_set, n_test_examples, n_layers, trial_num, epoc
 
     return 100.0*error/n_test_examples
 
-def train(n_epochs, f_etas, n_hidden_units, W_range, Y_range, folder, suffix="", n_trials=1, validation=True, dataset="MNIST", cuda=False, x_set=None, t_set=None, x_test_set=None, t_test_set=None):
+def train(n_epochs, f_etas, n_hidden_units, W_range, Y_range, folder, suffix="", n_trials=1, validation=True, dataset="MNIST", cuda=False, x_set=None, t_set=None, x_test_set=None, t_test_set=None, continuing_folder=""):
+    if folder == continuing_folder:
+        print("Error: If you're continuing a simulation, the new results need to be saved in a different folder.")
+        raise
+
     if dataset == "MNIST":
         # number of input & output neurons
         n_in  = 784
@@ -79,6 +83,8 @@ def train(n_epochs, f_etas, n_hidden_units, W_range, Y_range, folder, suffix="",
 
     with open(os.path.join("simulations", folder, "params.txt"), "a+") as f:
         f.write("Simulation run @ {}\n".format(datetime.datetime.now().strftime("%I:%M%p on %B %d, %Y")))
+        if continuing_folder != "":
+            f.write("Continuing from \"{}\"\n".format(continuing_folder))
         f.write("Number of epochs: {}\n".format(n_epochs))
         f.write("Feedforward learning rates: {}\n".format(f_etas))
         f.write("Number of units in each layer: {}\n".format(n_units))
@@ -95,6 +101,19 @@ def train(n_epochs, f_etas, n_hidden_units, W_range, Y_range, folder, suffix="",
 
         # create the network
         net = network.Network(n_units, n_in, W_range, Y_range, cuda=cuda)
+
+        # load weights if we're continuing a training session
+        if continuing_folder != "":
+            for layer_num in range(n_layers):
+                net.layers[layer_num].W = torch.from_numpy(np.load(os.path.join("simulations", continuing_folder, "trial_{}_f_weights_layer_{}{}.npy".format(trial_num, layer_num, "_"*(len(suffix)>0) + suffix))).astype(np.float32))
+                net.layers[layer_num].b = torch.from_numpy(np.load(os.path.join("simulations", continuing_folder, "trial_{}_f_biases_layer_{}{}.npy".format(trial_num, layer_num, "_"*(len(suffix)>0) + suffix))).astype(np.float32))
+                if cuda:
+                    net.layers[layer_num].W = net.layers[layer_num].W.cuda()
+                    net.layers[layer_num].b = net.layers[layer_num].b.cuda()
+                if layer_num != n_layers-1:
+                    net.layers[layer_num].Y = torch.from_numpy(np.load(os.path.join("simulations", continuing_folder, "trial_{}_b_weights_layer_{}{}.npy".format(trial_num, layer_num, "_"*(len(suffix)>0) + suffix))).astype(np.float32))
+                    if cuda:
+                        net.layers[layer_num].Y = net.layers[layer_num].Y.cuda()
 
         # make a list of training and testing example indices
         example_indices = np.arange(n_examples)
