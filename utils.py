@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 
-def load_mnist_data(n_examples, n_test_examples, validation=True, cuda=False):
+def load_mnist_data(n_examples, n_test_examples, validation=True):
     x_set      = np.load("mnist/x_train.npy").astype(np.float32)
     t_set      = np.load("mnist/t_train.npy").astype(np.float32)
     if validation:
@@ -14,12 +14,9 @@ def load_mnist_data(n_examples, n_test_examples, validation=True, cuda=False):
     x_set = x_set[:, :n_examples]
     t_set = t_set[:, :n_examples]
 
-    if cuda:
-        return torch.from_numpy(x_set).cuda(), torch.from_numpy(t_set).cuda(), torch.from_numpy(x_test_set).cuda(), torch.from_numpy(t_test_set).cuda()
-    else:
-        return torch.from_numpy(x_set), torch.from_numpy(t_set), torch.from_numpy(x_test_set), torch.from_numpy(t_test_set)
+    return x_set, t_set, x_test_set, t_test_set
 
-def load_cifar10_data(n_examples, n_test_examples, validation=True, cuda=False):
+def load_cifar10_data(n_examples, n_test_examples, validation=True):
     def unpickle(file):
         import pickle
         with open(file, 'rb') as fo:
@@ -53,7 +50,4 @@ def load_cifar10_data(n_examples, n_test_examples, validation=True, cuda=False):
     x_set = x_set[:, :n_examples]
     t_set = t_set[:, :n_examples]
 
-    if cuda:
-        return torch.from_numpy(x_set).cuda(), torch.from_numpy(t_set).cuda(), torch.from_numpy(x_test_set).cuda(), torch.from_numpy(t_test_set).cuda()
-    else:
-        return torch.from_numpy(x_set), torch.from_numpy(t_set), torch.from_numpy(x_test_set), torch.from_numpy(t_test_set)
+    return x_set, t_set, x_test_set, t_test_set

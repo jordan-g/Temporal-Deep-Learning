@@ -1,5 +1,4 @@
 import network
-import torch
 import numpy as np
 import matplotlib.pyplot as plt
 import os
@@ -23,11 +22,11 @@ def test(net, x_test_set, t_test_set, n_test_examples, n_layers, trial_num, epoc
 
         for timestep in range(n_layers):
             # do a forward pass
-            net.forward(x, None)
+            net.forward(x)
 
         # get the predicted & target class
-        _, predicted_class = torch.max(net.layers[-1].event_rate, 0)
-        _, target_class    = torch.max(t, 0)
+        predicted_class = np.argmax(net.layers[-1].burst_rate)
+        target_class    = np.argmax(t)
 
         # update the test error
         if predicted_class != target_class:
@@ -35,7 +34,7 @@ def test(net, x_test_set, t_test_set, n_test_examples, n_layers, trial_num, epoc
 
     return 100.0*error/n_test_examples
 
-def train(n_epochs, f_etas, n_hidden_units, W_range, Y_range, folder, suffix="", n_trials=1, validation=True, dataset="MNIST", cuda=False, x_set=None, t_set=None, x_test_set=None, t_test_set=None, continuing_folder=""):
+def train(n_epochs, f_etas, n_hidden_units, W_std, Y_std, folder, suffix="", n_trials=1, validation=True, dataset="MNIST", x_set=None, t_set=None, x_test_set=None, t_test_set=None, continuing_folder=""):
     if folder == continuing_folder:
         print("Error: If you're continuing a simulation, the new results need to be saved in a different folder.")
         raise
@@ -55,7 +54,7 @@ def train(n_epochs, f_etas, n_hidden_units, W_range, Y_range, folder, suffix="",
 
         # load MNIST data
         if x_set is None:
-            x_set, t_set, x_test_set, t_test_set = utils.load_mnist_data(n_examples, n_test_examples, validation=validation, cuda=cuda)
+            x_set, t_set, x_test_set, t_test_set = utils.load_mnist_data(n_examples, n_test_examples, validation=validation)
     elif dataset == "CIFAR10":
         n_in  = 3072
         n_out = 10
@@ -70,7 +69,7 @@ def train(n_epochs, f_etas, n_hidden_units, W_range, Y_range, folder, suffix="",
 
         # load CIFAR10 data
         if x_set is None:
-            x_set, t_set, x_test_set, t_test_set = utils.load_cifar10_data(n_examples, n_test_examples, validation=validation, cuda=cuda)
+            x_set, t_set, x_test_set, t_test_set = utils.load_cifar10_data(n_examples, n_test_examples, validation=validation)
 
     n_units = n_hidden_units + [n_out]
 
@@ -92,8 +91,8 @@ def train(n_epochs, f_etas, n_hidden_units, W_range, Y_range, folder, suffix="",
         f.write("Number of epochs: {}\n".format(n_epochs))
         f.write("Feedforward learning rates: {}\n".format(f_etas))
         f.write("Number of units in each layer: {}\n".format(n_units))
-        f.write("W range: {}\n".format(W_range))
-        f.write("Y range: {}\n".format(Y_range))
+        f.write("W range: {}\n".format(W_std))
+        f.write("Y range: {}\n".format(Y_std))
         f.write("Number of trials: {}\n\n".format(n_trials))
 
     # initialize recording arrays
@@ -104,20 +103,15 @@ def train(n_epochs, f_etas, n_hidden_units, W_range, Y_range, folder, suffix="",
         print("Trial {:>2d}/{:>2d}. --------------------".format(trial_num+1, n_trials))
 
         # create the network
-        net = network.Network(n_units, n_in, W_range, Y_range, cuda=cuda)
+        net = network.Network(n_units, n_in, W_std, Y_std)
 
         # load weights if we're continuing a training session
         if continuing_folder != "":
             for layer_num in range(n_layers):
-                net.layers[layer_num].W = torch.from_numpy(np.load(os.path.join("simulations", continuing_folder, "trial_{}_f_weights_layer_{}{}.npy".format(trial_num, layer_num, "_"*(len(suffix)>0) + suffix))).astype(np.float32))
-                net.layers[layer_num].b = torch.from_numpy(np.load(os.path.join("simulations", continuing_folder, "trial_{}_f_biases_layer_{}{}.npy".format(trial_num, layer_num, "_"*(len(suffix)>0) + suffix))).astype(np.float32))
-                if cuda:
-                    net.layers[layer_num].W = net.layers[layer_num].W.cuda()
-                    net.layers[layer_num].b = net.layers[layer_num].b.cuda()
+                net.layers[layer_num].W = np.load(os.path.join("simulations", continuing_folder, "trial_{}_f_weights_layer_{}{}.npy".format(trial_num, layer_num, "_"*(len(suffix)>0) + suffix)))
+                net.layers[layer_num].b = np.load(os.path.join("simulations", continuing_folder, "trial_{}_f_biases_layer_{}{}.npy".format(trial_num, layer_num, "_"*(len(suffix)>0) + suffix)))
                 if layer_num != n_layers-1:
-                    net.layers[layer_num].Y = torch.from_numpy(np.load(os.path.join("simulations", continuing_folder, "trial_{}_b_weights_layer_{}{}.npy".format(trial_num, layer_num, "_"*(len(suffix)>0) + suffix))).astype(np.float32))
-                    if cuda:
-                        net.layers[layer_num].Y = net.layers[layer_num].Y.cuda()
+                    net.layers[layer_num].Y = np.load(os.path.join("simulations", continuing_folder, "trial_{}_b_weights_layer_{}{}.npy".format(trial_num, layer_num, "_"*(len(suffix)>0) + suffix)))
 
         # make a list of training example indices
         example_indices = np.arange(n_examples)
@@ -156,13 +150,13 @@ def train(n_epochs, f_etas, n_hidden_units, W_range, Y_range, folder, suffix="",
                     update_hidden_weights = timestep in (n_layers + 1, n_layers + 3)
 
                     # do a forward pass
-                    if update_final_weights:
-                        net.forward(x, t)
-                    else:
-                        net.forward(x, None)
+                    net.forward(x)
 
-                    # do a backward pass (with weight updates) and record the loss at each layer
-                    tentative_losses = net.backward(t, f_etas, update_final_weights=update_final_weights, update_hidden_weights=update_hidden_weights)
+                    # do a backward pass and record the loss at each layer
+                    if update_final_weights:
+                        tentative_losses = net.backward(t, f_etas, update_final_weights=update_final_weights, update_hidden_weights=update_hidden_weights)
+                    else:
+                        tentative_losses = net.backward(None, f_etas, update_final_weights=update_final_weights, update_hidden_weights=update_hidden_weights)
 
                     if update_final_weights:
                         losses[trial_num, -1, epoch_num*n_examples + example_num] = tentative_losses[-1]
@@ -196,7 +190,7 @@ def train(n_epochs, f_etas, n_hidden_units, W_range, Y_range, folder, suffix="",
 
 if __name__ == "__main__":
     # folder in which to save results
-    folder = "mnist_testing"
+    folder = "multiplex_mnist_testing"
 
     # number of epochs of training
     n_epochs = 50
@@ -205,11 +199,11 @@ if __name__ == "__main__":
     n_trials = 5
 
     # initial weight magnitudes
-    Y_range = 1.0
-    W_range = 0.1
+    Y_std = 0.1
+    W_std = [0.1, 0.1]
 
-    n_hidden_units = [500]      # number of units per hidden layer
-    f_etas         = [0.1, 0.1] # feedforward learning rates
-    suffix         = "1_hidden" # suffix to append to files
+    n_hidden_units = []      # number of units per hidden layer
+    f_etas         = [0.01]  # feedforward learning rates
+    suffix         = "0_hidden" # suffix to append to files
 
-    train(n_epochs, f_etas, n_hidden_units, W_range, Y_range, folder, n_trials=n_trials, validation=True, suffix=suffix)
+    train(n_epochs, f_etas, n_hidden_units, W_std, Y_std, folder, n_trials=n_trials, validation=True, suffix=suffix)

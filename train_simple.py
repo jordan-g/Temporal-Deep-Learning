@@ -25,8 +25,8 @@ def test(net, x_test_set, t_test_set, n_test_examples, n_layers, trial_num, epoc
         net.forward(x)
 
         # get the predicted & target class
-        _, predicted_class = torch.max(net.layers[-1].event_rate, 0)
-        _, target_class    = torch.max(t, 0)
+        predicted_class = np.argmax(net.layers[-1].event_rate)
+        target_class    = np.argmax(t)
 
         # update the test error
         if predicted_class != target_class:
@@ -34,7 +34,7 @@ def test(net, x_test_set, t_test_set, n_test_examples, n_layers, trial_num, epoc
 
     return 100.0*error/n_test_examples
 
-def train(n_epochs, f_etas, n_hidden_units, W_range, Y_range, folder, suffix="", n_trials=1, validation=True, dataset="MNIST", cuda=False, x_set=None, t_set=None, x_test_set=None, t_test_set=None, continuing_folder=""):
+def train(n_epochs, f_etas, n_hidden_units, W_range, Y_range, folder, suffix="", n_trials=1, validation=True, dataset="MNIST", x_set=None, t_set=None, x_test_set=None, t_test_set=None, continuing_folder=""):
     if folder == continuing_folder:
         print("Error: If you're continuing a simulation, the new results need to be saved in a different folder.")
         raise
@@ -54,7 +54,7 @@ def train(n_epochs, f_etas, n_hidden_units, W_range, Y_range, folder, suffix="",
 
         # load MNIST data
         if x_set is None:
-            x_set, t_set, x_test_set, t_test_set = utils.load_mnist_data(n_examples, n_test_examples, validation=validation, cuda=cuda)
+            x_set, t_set, x_test_set, t_test_set = utils.load_mnist_data(n_examples, n_test_examples, validation=validation)
     elif dataset == "CIFAR10":
         n_in  = 3072
         n_out = 10
@@ -69,7 +69,7 @@ def train(n_epochs, f_etas, n_hidden_units, W_range, Y_range, folder, suffix="",
 
         # load CIFAR10 data
         if x_set is None:
-            x_set, t_set, x_test_set, t_test_set = utils.load_cifar10_data(n_examples, n_test_examples, validation=validation, cuda=cuda)
+            x_set, t_set, x_test_set, t_test_set = utils.load_cifar10_data(n_examples, n_test_examples, validation=validation)
 
     n_units = n_hidden_units + [n_out]
 
@@ -100,20 +100,15 @@ def train(n_epochs, f_etas, n_hidden_units, W_range, Y_range, folder, suffix="",
         print("Trial {:>2d}/{:>2d}. --------------------".format(trial_num+1, n_trials))
 
         # create the network
-        net = network.Network(n_units, n_in, W_range, Y_range, cuda=cuda)
+        net = network.Network(n_units, n_in, W_range, Y_range)
 
         # load weights if we're continuing a training session
         if continuing_folder != "":
             for layer_num in range(n_layers):
-                net.layers[layer_num].W = torch.from_numpy(np.load(os.path.join("simulations", continuing_folder, "trial_{}_f_weights_layer_{}{}.npy".format(trial_num, layer_num, "_"*(len(suffix)>0) + suffix))).astype(np.float32))
-                net.layers[layer_num].b = torch.from_numpy(np.load(os.path.join("simulations", continuing_folder, "trial_{}_f_biases_layer_{}{}.npy".format(trial_num, layer_num, "_"*(len(suffix)>0) + suffix))).astype(np.float32))
-                if cuda:
-                    net.layers[layer_num].W = net.layers[layer_num].W.cuda()
-                    net.layers[layer_num].b = net.layers[layer_num].b.cuda()
+                net.layers[layer_num].W = np.load(os.path.join("simulations", continuing_folder, "trial_{}_f_weights_layer_{}{}.npy".format(trial_num, layer_num, "_"*(len(suffix)>0) + suffix)))
+                net.layers[layer_num].b = np.load(os.path.join("simulations", continuing_folder, "trial_{}_f_biases_layer_{}{}.npy".format(trial_num, layer_num, "_"*(len(suffix)>0) + suffix)))
                 if layer_num != n_layers-1:
-                    net.layers[layer_num].Y = torch.from_numpy(np.load(os.path.join("simulations", continuing_folder, "trial_{}_b_weights_layer_{}{}.npy".format(trial_num, layer_num, "_"*(len(suffix)>0) + suffix))).astype(np.float32))
-                    if cuda:
-                        net.layers[layer_num].Y = net.layers[layer_num].Y.cuda()
+                    net.layers[layer_num].Y = np.load(os.path.join("simulations", continuing_folder, "trial_{}_b_weights_layer_{}{}.npy".format(trial_num, layer_num, "_"*(len(suffix)>0) + suffix)))
 
         # make a list of training and testing example indices
         example_indices = np.arange(n_examples)
@@ -181,7 +176,7 @@ def train(n_epochs, f_etas, n_hidden_units, W_range, Y_range, folder, suffix="",
 
 if __name__ == "__main__":
     # folder in which to save results
-    folder = "mnist_testing_simple"
+    folder = "multiplex_mnist_testing_simple"
 
     # number of epochs of training
     n_epochs = 50
@@ -190,11 +185,11 @@ if __name__ == "__main__":
     n_trials = 1
 
     # initial weight magnitudes
-    Y_range = 1.0
+    Y_range = 0.01
     W_range = 0.1
 
     n_hidden_units = [500]      # number of units per hidden layer
-    f_etas         = [0.1, 0.1] # feedforward learning rates
+    f_etas         = [0.01, 0.1] # feedforward learning rates
     suffix         = "1_hidden" # suffix to append to files
 
     # train
