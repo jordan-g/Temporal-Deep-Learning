@@ -7,7 +7,7 @@ from scipy.special import expit
 import pdb
 
 class Network:
-    def __init__(self, n, n_in, W_range, Y_range):
+    def __init__(self, n, n_in, W_ranges, Y_ranges):
         self.n        = n           # layer sizes - eg. (500, 100, 10)
         self.n_layers = len(self.n) # number of layers
 
@@ -15,14 +15,14 @@ class Network:
         self.layers = []
 
         if self.n_layers == 1:
-            self.layers.append(outputLayer(self, 0, size=self.n[0], f_input_size=n_in, W_range=W_range))
+            self.layers.append(outputLayer(self, 0, size=self.n[0], f_input_size=n_in, W_range=W_ranges[0]))
         else:
             for layer_num in range(self.n_layers-1):
                 if layer_num == 0:
-                    self.layers.append(hiddenLayer(self, layer_num, size=self.n[layer_num], f_input_size=n_in, b_input_size=self.n[-1], W_range=W_range, Y_range=Y_range))
+                    self.layers.append(hiddenLayer(self, layer_num, size=self.n[layer_num], f_input_size=n_in, b_input_size=self.n[1], W_range=W_ranges[0], Y_range=Y_ranges[0]))
                 else:
-                    self.layers.append(hiddenLayer(self, layer_num, size=self.n[layer_num], f_input_size=self.n[layer_num-1], b_input_size=self.n[layer_num+1], W_range=W_range, Y_range=Y_range))
-            self.layers.append(outputLayer(self, self.n_layers-1, size=self.n[-1], f_input_size=self.n[-2], W_range=W_range))
+                    self.layers.append(hiddenLayer(self, layer_num, size=self.n[layer_num], f_input_size=self.n[layer_num-1], b_input_size=self.n[layer_num+1], W_range=W_ranges[layer_num], Y_range=Y_ranges[layer_num]))
+            self.layers.append(outputLayer(self, self.n_layers-1, size=self.n[-1], f_input_size=self.n[-2], W_range=W_ranges[-1]))
 
     def forward(self, x):
         if self.n_layers == 1:
@@ -77,22 +77,48 @@ class hiddenLayer:
         self.f_input = f_input
 
         self.s = np.dot(self.W, self.f_input) + self.b
-        self.s[self.s < 0] = 0
 
-        self.event_rate = np.exp(self.s) - 0.9999
+        # self.event_rate = np.log(1 + np.exp(self.s))
+        self.event_rate = np.log(1 + np.exp(self.s))
 
     def backward(self, b_input, target_input, f_eta):
-        # update burst probability
-        self.burst_prob   = np.dot(self.Y, b_input*(b_input >= 0.0001).astype(int))
-        self.burst_prob_t = np.dot(self.Y, target_input*(b_input >= 0.0001).astype(int))
+        # u   = np.dot(self.Y, b_input*(b_input >= 0.0001).astype(int))
+        # u_t = np.dot(self.Y, target_input*(b_input >= 0.0001).astype(int))
 
-        # calculate loss
-        loss = np.mean((self.burst_prob_t - self.burst_prob)**2)
+        # # update burst probability
+        # burst_prob   = expit(u)
+        # burst_prob_t = expit(u_t)
+
+        # burst_rate   = burst_prob*self.event_rate
+        # burst_rate_t = burst_prob_t*self.event_rate
+
+        # p = expit(np.dot(self.Q, burst_rate))
+        # c = np.dot(self.Z, p)
+
+        self.u = np.dot(self.Y, b_input*(b_input >= 0.0001).astype(int))
+        self.u_t = np.dot(self.Y, target_input*(b_input >= 0.0001).astype(int))
+
+        # self.u = np.dot(self.Y, b_input)
+        # self.u_t = np.dot(self.Y, target_input)
+
+        # print(np.amax(self.u) - np.amin(self.u), np.amax(self.u))
+
+        # update burst probability
+        self.burst_prob   = expit(self.u)
+        self.burst_prob_t = expit(self.u_t)
+        # self.burst_prob   = self.u
+        # self.burst_prob_t = self.u_t
 
         self.burst_rate   = self.burst_prob*self.event_rate
         self.burst_rate_t = self.burst_prob_t*self.event_rate
 
-        E = (self.burst_rate_t - self.burst_rate)*-(self.s >= 0).astype(int)
+        # E_Z = (0.5 - self.u)*-(self.u/c)
+        # self.Z -= f_eta*np.outer(E_Z, p)
+
+        # calculate loss
+        loss = np.mean((self.burst_prob_t - self.burst_prob)**2)
+
+        E = (self.burst_rate_t - self.burst_rate)*-1
 
         # update feedforward weights & biases
         self.W -= f_eta*np.outer(E, self.f_input)
@@ -108,7 +134,7 @@ class outputLayer:
         self.f_input_size = f_input_size
 
         # initialize feedforward weights & biases
-        self.W = W_range*np.random.uniform(-1, 1, size=(self.size, self.f_input_size))
+        self.W = W_range*np.random.uniform(-0.5, 1, size=(self.size, self.f_input_size))
         self.b = np.zeros(self.size)
 
         self.f_input    = np.zeros(self.f_input_size)
@@ -127,14 +153,15 @@ class outputLayer:
 
     def backward(self, t, f_eta):
         # calculate loss
-        self.burst_prob = 0.1
+        self.burst_prob = 0.2
 
         self.burst_rate   = self.burst_prob*self.event_rate
-        self.burst_rate_t = self.burst_prob*t
+        self.burst_rate_t = self.burst_prob*(t + 0.01)
 
         loss = np.mean(((self.burst_rate_t - self.burst_rate))**2)
 
-        E = (self.burst_rate_t - self.burst_rate)*-self.burst_prob*(self.event_rate >= self.baseline_event_rate).astype(int)
+        E = (self.burst_rate_t - self.burst_rate)*-self.burst_prob*(self.event_rate > self.baseline_event_rate).astype(int)
+        # E = (self.burst_rate_t - self.burst_rate)*-self.burst_prob
 
         # update feedforward weights & biases
         self.W -= f_eta*np.outer(E, self.f_input)

@@ -145,6 +145,11 @@ def train(n_epochs, f_etas, n_hidden_units, W_range, Y_range, folder, suffix="",
                 # do a forward pass
                 net.forward(x)
 
+                if example_num == 0:
+                    print("L0 min: {}, max: {}".format(np.amin(net.layers[0].event_rate), np.amax(net.layers[0].event_rate)))
+                    print("L1 min: {}, max: {}".format(np.amin(net.layers[1].event_rate), np.amax(net.layers[1].event_rate)))
+                    print("L2 min: {}, max: {}".format(np.amin(net.layers[2].event_rate), np.amax(net.layers[2].event_rate)))
+
                 # do a backward pass (with weight updates) and record the loss at each layer
                 losses[trial_num, :, epoch_num*n_examples + example_num] = net.backward(x, t, f_etas)
 
@@ -154,6 +159,22 @@ def train(n_epochs, f_etas, n_hidden_units, W_range, Y_range, folder, suffix="",
                         print("{}Trial {:>3d}, epoch {:>3d}, example {:>5d}. Avg. output loss: {:.10f}. Last hidden loss: {:.10f}.".format(suffix + ". "*(len(suffix)>0), trial_num+1, epoch_num+1, example_num+1, np.mean(losses[trial_num, -1, epoch_num*n_examples + example_num - 999:epoch_num*n_examples + example_num]), np.mean(losses[trial_num, -2, epoch_num*n_examples + example_num - 999:epoch_num*n_examples + example_num])))
                     else:
                         print("{}Trial {:>3d}, epoch {:>3d}, example {:>5d}. Avg. output loss: {:.10f}.".format(suffix + ". "*(len(suffix)>0), trial_num+1, epoch_num+1, example_num+1, np.mean(losses[trial_num, -1, epoch_num*n_examples + example_num - 999:epoch_num*n_examples + example_num])))
+
+                    # print("W0 min: {}, max: {}".format(np.amin(net.layers[0].W), np.amax(net.layers[0].W)))
+                    # print("b0 min: {}, max: {}".format(np.amin(net.layers[0].b), np.amax(net.layers[0].b)))
+                    # print("W1 min: {}, max: {}".format(np.amin(net.layers[1].W), np.amax(net.layers[1].W)))
+                    # print("b1 min: {}, max: {}".format(np.amin(net.layers[1].b), np.amax(net.layers[1].b)))
+                    # print("L0 min: {}, max: {}".format(np.amin(net.layers[0].event_rate), np.amax(net.layers[0].event_rate)))
+                    # print("L1 min: {}, max: {}".format(np.amin(net.layers[1].event_rate), np.amax(net.layers[1].event_rate)))
+                    # print("L2 min: {}, max: {}".format(np.amin(net.layers[2].event_rate), np.amax(net.layers[2].event_rate)))
+                    # print(net.layers[-1].event_rate)
+                    # print("L0 min: {}, max: {}".format(np.amin(net.layers[0].burst_prob), np.amax(net.layers[0].burst_prob)))
+                    # print("L1 min: {}, max: {}".format(np.amin(net.layers[1].burst_prob), np.amax(net.layers[1].burst_prob)))
+
+                    error = test(net, x_set[:, :n_test_examples], t_set[:, :n_test_examples], n_test_examples, n_layers, trial_num, epoch_num+1)
+
+                    # print test error
+                    print("Epoch {} test error: {}.".format(epoch_num+1, error))
 
             # calculate the test error as a percentage
             # errors[trial_num, epoch_num+1] = test(net, x_test_set, t_test_set, n_test_examples, n_layers, trial_num, epoch_num+1)
@@ -185,12 +206,12 @@ if __name__ == "__main__":
     n_trials = 1
 
     # initial weight magnitudes
-    Y_range = 0.01
-    W_range = 0.1
+    Y_ranges = [0.05, 0.05]
+    W_ranges = [0.1, 0.1, 0.01]
 
-    n_hidden_units = [500]      # number of units per hidden layer
-    f_etas         = [0.01, 0.1] # feedforward learning rates
+    n_hidden_units = [500, 200]      # number of units per hidden layer
+    f_etas         = [0.005, 0.005, 0.05] # feedforward learning rates
     suffix         = "1_hidden" # suffix to append to files
 
     # train
-    train(n_epochs, f_etas, n_hidden_units, W_range, Y_range, folder, n_trials=n_trials, validation=True, suffix=suffix)
+    train(n_epochs, f_etas, n_hidden_units, W_ranges, Y_ranges, folder, n_trials=n_trials, validation=True, suffix=suffix)
