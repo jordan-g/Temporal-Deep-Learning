@@ -6,6 +6,7 @@ import os
 import utils
 import time
 import datetime
+from plotter import Plotter
 
 def test(net, x_test_set, t_test_set, n_test_examples, n_layers, trial_num, epoch_num):
     # make a list of testing example indices
@@ -34,7 +35,7 @@ def test(net, x_test_set, t_test_set, n_test_examples, n_layers, trial_num, epoc
 
     return 100.0*error/n_test_examples
 
-def train(n_epochs, f_etas, n_hidden_units, W_range, Y_range, folder, suffix="", n_trials=1, validation=True, dataset="MNIST", x_set=None, t_set=None, x_test_set=None, t_test_set=None, continuing_folder=""):
+def train(n_epochs, f_etas, r_etas, n_hidden_units, W_range, Y_range, Z_range, folder, suffix="", n_trials=1, validation=True, dataset="MNIST", x_set=None, t_set=None, x_test_set=None, t_test_set=None, continuing_folder=""):
     if folder == continuing_folder:
         print("Error: If you're continuing a simulation, the new results need to be saved in a different folder.")
         raise
@@ -87,20 +88,27 @@ def train(n_epochs, f_etas, n_hidden_units, W_range, Y_range, folder, suffix="",
             f.write("Continuing from \"{}\"\n".format(continuing_folder))
         f.write("Number of epochs: {}\n".format(n_epochs))
         f.write("Feedforward learning rates: {}\n".format(f_etas))
+        f.write("Recurrent learning rates: {}\n".format(r_etas))
         f.write("Number of units in each layer: {}\n".format(n_units))
         f.write("W range: {}\n".format(W_range))
         f.write("Y range: {}\n".format(Y_range))
         f.write("Number of trials: {}\n\n".format(n_trials))
 
     # initialize recording arrays
+    loss_plotter  = Plotter(title="Loss")
+    max_u_plotter = Plotter(title="Maximum u")
+    mean_Z_plotter = Plotter(title="Mean Z")
+
     losses = np.zeros((n_trials, n_layers, n_epochs*n_examples))
+    max_us = np.zeros((n_trials, n_layers-1, n_epochs*int(n_examples/1000)))
+    min_us = np.zeros((n_trials, n_layers-1, n_epochs*int(n_examples/1000)))
     errors = np.zeros((n_trials, n_epochs+1))
 
     for trial_num in range(n_trials):
         print("Trial {:>2d}/{:>2d}. --------------------".format(trial_num+1, n_trials))
 
         # create the network
-        net = network.Network(n_units, n_in, W_range, Y_range)
+        net = network.Network(n_units, n_in, W_range, Y_range, Z_range)
 
         # load weights if we're continuing a training session
         if continuing_folder != "":
@@ -145,13 +153,21 @@ def train(n_epochs, f_etas, n_hidden_units, W_range, Y_range, folder, suffix="",
                 # do a forward pass
                 net.forward(x)
 
-                if example_num == 0:
-                    print("L0 min: {}, max: {}".format(np.amin(net.layers[0].event_rate), np.amax(net.layers[0].event_rate)))
-                    print("L1 min: {}, max: {}".format(np.amin(net.layers[1].event_rate), np.amax(net.layers[1].event_rate)))
-                    print("L2 min: {}, max: {}".format(np.amin(net.layers[2].event_rate), np.amax(net.layers[2].event_rate)))
-
                 # do a backward pass (with weight updates) and record the loss at each layer
-                losses[trial_num, :, epoch_num*n_examples + example_num] = net.backward(x, t, f_etas)
+                losses[trial_num, :, epoch_num*n_examples + example_num] = net.backward(x, t, f_etas, r_etas)
+
+                loss_plotter.plot([losses[trial_num, i, epoch_num*n_examples + example_num] for i in range(n_layers-1)], labels=["Layer {}".format(i) for i in range(n_layers-1)])
+                max_u_plotter.plot([np.amax(net.layers[i].u) for i in range(n_layers-1)], labels=["Layer {}".format(i) for i in range(n_layers-1)])
+                mean_Z_plotter.plot([np.mean(net.layers[i].Z) for i in range(n_layers-1)], labels=["Layer {}".format(i) for i in range(n_layers-1)])
+
+                for l in range(n_layers-1):
+                    max_us[trial_num, l, epoch_num*int(n_examples/1000) + example_num//1000] += np.amax(net.layers[l].u)
+                    min_us[trial_num, l, epoch_num*int(n_examples/1000) + example_num//1000] += np.amin(net.layers[l].u)
+
+                # if example_num == 0:
+                #     print("L0 min: {}, max: {}".format(np.amin(net.layers[0].u), np.amax(net.layers[0].u)))
+                #     print("L1 min: {}, max: {}".format(np.amin(net.layers[1].u), np.amax(net.layers[1].u)))
+                    # print("L2 min: {}, max: {}".format(np.amin(net.layers[2].u), np.amax(net.layers[2].u)))
 
                 # print progress every 1000 examples
                 if (example_num+1) % 1000 == 0:
@@ -168,8 +184,20 @@ def train(n_epochs, f_etas, n_hidden_units, W_range, Y_range, folder, suffix="",
                     # print("L1 min: {}, max: {}".format(np.amin(net.layers[1].event_rate), np.amax(net.layers[1].event_rate)))
                     # print("L2 min: {}, max: {}".format(np.amin(net.layers[2].event_rate), np.amax(net.layers[2].event_rate)))
                     # print(net.layers[-1].event_rate)
-                    # print("L0 min: {}, max: {}".format(np.amin(net.layers[0].burst_prob), np.amax(net.layers[0].burst_prob)))
-                    # print("L1 min: {}, max: {}".format(np.amin(net.layers[1].burst_prob), np.amax(net.layers[1].burst_prob)))
+                    # print(np.mean(net.layers[-2].u - 0.0))
+                    # print(np.mean(net.layers[-3].u - 0.0))
+
+                    max_us[trial_num, l, epoch_num*int(n_examples/1000) + example_num//1000] /= 1000
+                    min_us[trial_num, l, epoch_num*int(n_examples/1000) + example_num//1000] /= 1000
+
+                    print("L0 loss: {}".format(losses[trial_num, 0, epoch_num*n_examples + example_num]))
+                    print("L1 loss: {}".format(losses[trial_num, 1, epoch_num*n_examples + example_num]))
+
+                    print("L0 min u: {}, max: {}".format(min_us[trial_num, 0, epoch_num*int(n_examples/1000) + example_num//1000], max_us[trial_num, 0, epoch_num*int(n_examples/1000) + example_num//1000]))
+                    print("L1 min u: {}, max: {}".format(min_us[trial_num, 1, epoch_num*int(n_examples/1000) + example_num//1000], max_us[trial_num, 1, epoch_num*int(n_examples/1000) + example_num//1000]))
+
+                    print("L0 min Z: {}, max: {}".format(np.amin(net.layers[0].Z), np.amax(net.layers[0].Z)))
+                    print("L1 min Z: {}, max: {}".format(np.amin(net.layers[1].Z), np.amax(net.layers[1].Z)))
 
                     error = test(net, x_set[:, :n_test_examples], t_set[:, :n_test_examples], n_test_examples, n_layers, trial_num, epoch_num+1)
 
@@ -206,12 +234,15 @@ if __name__ == "__main__":
     n_trials = 1
 
     # initial weight magnitudes
-    Y_ranges = [0.05, 0.05]
-    W_ranges = [0.1, 0.1, 0.01]
+    Y_ranges = [0.1, 10.0]
+    Z_ranges = [1.0, 1.0]
+    W_ranges = [0.01, 0.01, 0.01]
 
-    n_hidden_units = [500, 200]      # number of units per hidden layer
-    f_etas         = [0.005, 0.005, 0.05] # feedforward learning rates
+    n_hidden_units = [500, 300]           # number of units per hidden layer
+    # f_etas         = [0.01, 0.01, 0.01] # feedforward learning rates
+    f_etas         = [0, 0, 0] # feedforward learning rates
+    r_etas = [0.1, 0.1]
     suffix         = "1_hidden" # suffix to append to files
 
     # train
-    train(n_epochs, f_etas, n_hidden_units, W_ranges, Y_ranges, folder, n_trials=n_trials, validation=True, suffix=suffix)
+    train(n_epochs, f_etas, r_etas, n_hidden_units, W_ranges, Y_ranges, Z_ranges, folder, n_trials=n_trials, validation=True, suffix=suffix)
