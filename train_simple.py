@@ -209,10 +209,9 @@ if __name__ == "__main__":
     Z_ranges = [1.0, 1.0]
     W_ranges = [0.01, 0.01, 0.01]
 
-    n_hidden_units = [500, 300]           # number of units per hidden layer
-    # f_etas         = [0.01, 0.01, 0.01] # feedforward learning rates
+    n_hidden_units = [500, 300] # number of units per hidden layer
     f_etas         = [0, 0, 0] # feedforward learning rates
-    r_etas         = [0.001, 0.001]
+    r_etas         = [0.001, 0.001] # recurrent learning rates
     suffix         = "1_hidden" # suffix to append to files
 
     # train
