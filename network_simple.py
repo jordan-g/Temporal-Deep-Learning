@@ -81,8 +81,6 @@ class hiddenLayer:
 
         self.s = np.dot(self.W, self.f_input) + self.b
 
-        # self.event_rate = np.log(1 + np.exp(self.s))
-        # self.event_rate = np.log(1 + np.exp(self.s))
         self.event_rate = expit(self.s)
 
     def backward(self, b_input, target_input, f_eta, r_eta):
@@ -98,18 +96,14 @@ class hiddenLayer:
         self.burst_rate   = self.burst_prob*self.event_rate
         self.burst_rate_t = self.burst_prob_t*self.event_rate
 
-        # E_Z = np.sum((self.u**2))
-
         E_Z = (-self.u)*(self.u/c)
 
-        self.Z -= r_eta*np.outer(E_Z, self.event_rate) - 0.01*(0.01 - self.Z)
-        # print(np.mean(self.Z))
-        # self.d -= r_eta*E_Z + 0.0*self.d
+        self.Z -= r_eta*(np.outer(E_Z, self.event_rate) - (0.01 - self.Z))
 
         # calculate loss
-        loss = 0.5*np.sum((self.u)**2) + 0.5*np.sum(self.Z**2)
+        loss = 0.5*np.sum((self.u)**2) + 0.5*np.sum((0.01 - self.Z)**2)
 
-        E = (self.burst_rate_t - self.burst_rate)*-self.event_rate*(1.0 - self.event_rate)
+        # E = (self.burst_rate_t - self.burst_rate)*-self.event_rate*(1.0 - self.event_rate)
 
         # update feedforward weights & biases
         # self.W -= f_eta*np.outer(E, self.f_input)
@@ -151,7 +145,7 @@ class outputLayer:
 
         loss = np.mean(((self.burst_rate_t - self.burst_rate))**2)
 
-        E = (self.burst_rate_t - self.burst_rate)*-self.burst_prob*(self.event_rate > self.baseline_event_rate).astype(int)
+        # E = (self.burst_rate_t - self.burst_rate)*-self.burst_prob*(self.event_rate > self.baseline_event_rate).astype(int)
         # E = (self.burst_rate_t - self.burst_rate)*-self.burst_prob
 
         # update feedforward weights & biases
