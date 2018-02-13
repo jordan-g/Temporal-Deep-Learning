@@ -5,6 +5,7 @@ import os
 import utils
 import time
 import datetime
+from plotter import Plotter, SigmoidLimitsPlotter
 
 def test(net, x_test_set, t_test_set, n_test_examples, n_layers, trial_num, epoch_num):
     # make a list of testing example indices
@@ -34,7 +35,7 @@ def test(net, x_test_set, t_test_set, n_test_examples, n_layers, trial_num, epoc
 
     return 100.0*error/n_test_examples
 
-def train(n_epochs, f_etas, n_hidden_units, W_std, Y_std, folder, suffix="", n_trials=1, validation=True, dataset="MNIST", x_set=None, t_set=None, x_test_set=None, t_test_set=None, continuing_folder=""):
+def train(n_epochs, f_etas, r_etas, n_hidden_units, W_std, Y_std, Z_std, folder, suffix="", n_trials=1, validation=True, dataset="MNIST", x_set=None, t_set=None, x_test_set=None, t_test_set=None, continuing_folder=""):
     if folder == continuing_folder:
         print("Error: If you're continuing a simulation, the new results need to be saved in a different folder.")
         raise
@@ -90,10 +91,17 @@ def train(n_epochs, f_etas, n_hidden_units, W_std, Y_std, folder, suffix="", n_t
             f.write("Continuing from \"{}\"\n".format(continuing_folder))
         f.write("Number of epochs: {}\n".format(n_epochs))
         f.write("Feedforward learning rates: {}\n".format(f_etas))
+        f.write("Recurrent learning rates: {}\n".format(r_etas))
         f.write("Number of units in each layer: {}\n".format(n_units))
         f.write("W range: {}\n".format(W_std))
         f.write("Y range: {}\n".format(Y_std))
+        f.write("Z range: {}\n".format(Z_std))
         f.write("Number of trials: {}\n\n".format(n_trials))
+
+    loss_plotter           = Plotter(title="Loss")
+    max_u_plotter          = Plotter(title="Maximum u")
+    sigmoid_limits_plotter = SigmoidLimitsPlotter(title="Sigmoid Limits")
+    mean_Z_plotter         = Plotter(title="Mean Z")
 
     # initialize recording arrays
     losses = np.zeros((n_trials, n_layers, n_epochs*n_examples))
@@ -103,7 +111,7 @@ def train(n_epochs, f_etas, n_hidden_units, W_std, Y_std, folder, suffix="", n_t
         print("Trial {:>2d}/{:>2d}. --------------------".format(trial_num+1, n_trials))
 
         # create the network
-        net = network.Network(n_units, n_in, W_std, Y_std)
+        net = network.Network(n_units, n_in, W_std, Y_std, Z_std)
 
         # load weights if we're continuing a training session
         if continuing_folder != "":
@@ -154,14 +162,20 @@ def train(n_epochs, f_etas, n_hidden_units, W_std, Y_std, folder, suffix="", n_t
 
                     # do a backward pass and record the loss at each layer
                     if update_final_weights:
-                        tentative_losses = net.backward(t, f_etas, update_final_weights=update_final_weights, update_hidden_weights=update_hidden_weights)
+                        tentative_losses = net.backward(t, f_etas, r_etas, update_final_weights=update_final_weights, update_hidden_weights=update_hidden_weights)
                     else:
-                        tentative_losses = net.backward(None, f_etas, update_final_weights=update_final_weights, update_hidden_weights=update_hidden_weights)
+                        tentative_losses = net.backward(None, f_etas, r_etas, update_final_weights=update_final_weights, update_hidden_weights=update_hidden_weights)
 
                     if update_final_weights:
                         losses[trial_num, -1, epoch_num*n_examples + example_num] = tentative_losses[-1]
                     if update_hidden_weights:
                         losses[trial_num, :-1, epoch_num*n_examples + example_num] = tentative_losses[:-1]
+
+                    # update plots
+                    loss_plotter.plot([losses[trial_num, i, epoch_num*n_examples + example_num] for i in range(n_layers-1)], labels=["Layer {}".format(i) for i in range(n_layers-1)])
+                    max_u_plotter.plot([np.amax(net.layers[i].u) for i in range(n_layers-1)], labels=["Layer {}".format(i) for i in range(n_layers-1)])
+                    mean_Z_plotter.plot([np.mean(net.layers[i].Z) for i in range(n_layers-1)], labels=["Layer {}".format(i) for i in range(n_layers-1)])
+                    sigmoid_limits_plotter.plot([np.amax(net.layers[i].u) for i in range(n_layers-1)], [np.amin(net.layers[i].u) for i in range(n_layers-1)], labels=["Layer {}".format(i) for i in range(n_layers-1)])
 
                 # print progress every 1000 examples
                 if (example_num+1) % 1000 == 0:
@@ -196,14 +210,16 @@ if __name__ == "__main__":
     n_epochs = 50
 
     # number of trials to repeat training
-    n_trials = 5
+    n_trials = 1
 
     # initial weight magnitudes
-    Y_std = 0.1
-    W_std = [0.1, 0.1]
+    Y_std = [0.1, 10.0]
+    Z_std = [1.0, 1.0]
+    W_std = [0.01, 0.01, 0.01]
 
-    n_hidden_units = []      # number of units per hidden layer
-    f_etas         = [0.01]  # feedforward learning rates
-    suffix         = "0_hidden" # suffix to append to files
+    n_hidden_units = [500, 300] # number of units per hidden layer
+    f_etas         = [0, 0, 0] # feedforward learning rates
+    r_etas         = [0.001, 0.001] # recurrent learning rates
+    suffix         = "1_hidden" # suffix to append to files
 
-    train(n_epochs, f_etas, n_hidden_units, W_std, Y_std, folder, n_trials=n_trials, validation=True, suffix=suffix)
+    train(n_epochs, f_etas, r_etas, n_hidden_units, W_std, Y_std, Z_std, folder, n_trials=n_trials, validation=True, suffix=suffix)

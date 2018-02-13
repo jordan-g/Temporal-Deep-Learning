@@ -92,6 +92,7 @@ def train(n_epochs, f_etas, r_etas, n_hidden_units, W_range, Y_range, Z_range, f
         f.write("Number of units in each layer: {}\n".format(n_units))
         f.write("W range: {}\n".format(W_range))
         f.write("Y range: {}\n".format(Y_range))
+        f.write("Z range: {}\n".format(Z_range))
         f.write("Number of trials: {}\n\n".format(n_trials))
 
     # initialize recording arrays
@@ -159,9 +160,9 @@ def train(n_epochs, f_etas, r_etas, n_hidden_units, W_range, Y_range, Z_range, f
 
                 # update plots
                 loss_plotter.plot([losses[trial_num, i, epoch_num*n_examples + example_num] for i in range(n_layers-1)], labels=["Layer {}".format(i) for i in range(n_layers-1)])
-                max_u_plotter.plot([np.amax(net.layers[i].u) for i in range(n_layers-1)], labels=["Layer {}".format(i) for i in range(n_layers-1)])
+                max_u_plotter.plot([max(np.amax(net.layers[i].u), np.amax(net.layers[i].u_t)) for i in range(n_layers-1)], labels=["Layer {}".format(i) for i in range(n_layers-1)])
                 mean_Z_plotter.plot([np.mean(net.layers[i].Z) for i in range(n_layers-1)], labels=["Layer {}".format(i) for i in range(n_layers-1)])
-                sigmoid_limits_plotter.plot([np.amax(net.layers[i].u) for i in range(n_layers-1)], [np.amin(net.layers[i].u) for i in range(n_layers-1)], labels=["Layer {}".format(i) for i in range(n_layers-1)])
+                sigmoid_limits_plotter.plot([max(np.amax(net.layers[i].u), np.amax(net.layers[i].u_t)) for i in range(n_layers-1)], [min(np.amin(net.layers[i].u), np.amin(net.layers[i].u_t)) for i in range(n_layers-1)], labels=["Layer {}".format(i) for i in range(n_layers-1)])
 
                 # print progress every 1000 examples
                 if (example_num+1) % 1000 == 0:
