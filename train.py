@@ -35,7 +35,7 @@ def test(net, x_test_set, t_test_set, n_test_examples, n_layers, trial_num, epoc
 
     return 100.0*error/n_test_examples
 
-def train(n_epochs, f_etas, r_etas, n_hidden_units, W_std, Y_std, Z_std, folder, suffix="", n_trials=1, validation=True, dataset="MNIST", x_set=None, t_set=None, x_test_set=None, t_test_set=None, continuing_folder=""):
+def train(n_epochs, f_etas, r_etas, b_etas, n_hidden_units, W_std, Y_std, Z_std, folder, suffix="", n_trials=1, validation=True, dataset="MNIST", x_set=None, t_set=None, x_test_set=None, t_test_set=None, continuing_folder=""):
     if folder == continuing_folder:
         print("Error: If you're continuing a simulation, the new results need to be saved in a different folder.")
         raise
@@ -162,9 +162,9 @@ def train(n_epochs, f_etas, r_etas, n_hidden_units, W_std, Y_std, Z_std, folder,
 
                     # do a backward pass and record the loss at each layer
                     if update_final_weights:
-                        tentative_losses = net.backward(t, f_etas, r_etas, update_final_weights=update_final_weights, update_hidden_weights=update_hidden_weights)
+                        tentative_losses = net.backward(t, f_etas, r_etas, b_etas, update_final_weights=update_final_weights, update_hidden_weights=update_hidden_weights)
                     else:
-                        tentative_losses = net.backward(None, f_etas, r_etas, update_final_weights=update_final_weights, update_hidden_weights=update_hidden_weights)
+                        tentative_losses = net.backward(None, f_etas, r_etas, b_etas, update_final_weights=update_final_weights, update_hidden_weights=update_hidden_weights)
 
                     if update_final_weights:
                         losses[trial_num, -1, epoch_num*n_examples + example_num] = tentative_losses[-1]
@@ -220,6 +220,7 @@ if __name__ == "__main__":
     n_hidden_units = [500, 300] # number of units per hidden layer
     f_etas         = [0, 0, 0] # feedforward learning rates
     r_etas         = [0.001, 0.001] # recurrent learning rates
+    b_etas         = [0.01, 0.1] # feedback learning rates
     suffix         = "1_hidden" # suffix to append to files
 
-    train(n_epochs, f_etas, r_etas, n_hidden_units, W_std, Y_std, Z_std, folder, n_trials=n_trials, validation=True, suffix=suffix)
+    train(n_epochs, f_etas, r_etas, b_etas, n_hidden_units, W_std, Y_std, Z_std, folder, n_trials=n_trials, validation=True, suffix=suffix)

@@ -35,14 +35,14 @@ class Network:
                     self.layers[layer_num].forward(self.layers[layer_num-1].event_rate)
             self.layers[-1].forward(self.layers[-2].event_rate)
 
-    def backward(self, x, t, f_etas, r_etas):
+    def backward(self, x, t, f_etas, r_etas, b_etas):
         losses = np.zeros(self.n_layers)
         if self.n_layers == 1:
             losses[0] = self.layers[0].backward(t, f_etas[0])
         else:
             losses[-1] = self.layers[-1].backward(t, f_etas[-1])
             for layer_num in range(self.n_layers-2, -1, -1):
-                losses[layer_num] = self.layers[layer_num].backward(self.layers[layer_num+1].burst_rate, self.layers[layer_num+1].burst_rate_t, f_etas[layer_num], r_etas[layer_num])
+                losses[layer_num] = self.layers[layer_num].backward(self.layers[layer_num+1].burst_rate, self.layers[layer_num+1].burst_rate_t, f_etas[layer_num], r_etas[layer_num], b_etas[layer_num])
 
         return losses
 
@@ -83,11 +83,17 @@ class hiddenLayer:
 
         self.event_rate = expit(self.s)
 
-    def backward(self, b_input, target_input, f_eta, r_eta):
+    def backward(self, b_input, target_input, f_eta, r_eta, b_eta):
         c = np.dot(self.Z, self.event_rate)
 
         self.u   = np.dot(self.Y, b_input)/c
         self.u_t = np.dot(self.Y, target_input)/c
+
+        Z_sum = c
+
+        # print(np.mean(c))
+
+        self.max_u = np.sum(np.abs(self.Y), axis=1)/Z_sum
 
         # update burst probability
         self.burst_prob   = expit(self.u)
@@ -98,10 +104,18 @@ class hiddenLayer:
 
         E_Z = (-self.u)*(self.u/c)
 
-        self.Z -= r_eta*(np.outer(E_Z, self.event_rate) - (0.01 - self.Z))
+        self.Z -= r_eta*(np.outer(E_Z, self.event_rate) - (0.1 - self.Z))
+        # self.Z[self.Z < 0] = 0
+
+        E_Y = -(2 - self.max_u)/Z_sum
+
+        self.Y -= b_eta*((np.sign(self.Y).T * E_Y).T)
+        # self.Y[self.Y < 0] = 0
 
         # calculate loss
-        loss = 0.5*np.sum((self.u)**2) + 0.5*np.sum((0.01 - self.Z)**2)
+        loss_Z = 0.5*np.sum((self.u)**2) + 0.5*np.sum((0.1 - self.Z)**2)
+
+        loss_Y = 0.5*np.sum((2 - self.max_u)**2)
 
         # E = (self.burst_rate_t - self.burst_rate)*-self.event_rate*(1.0 - self.event_rate)
 
@@ -109,7 +123,7 @@ class hiddenLayer:
         # self.W -= f_eta*np.outer(E, self.f_input)
         # self.b -= f_eta*E
 
-        return loss
+        return loss_Y
 
 class outputLayer:
     def __init__(self, net, layer_num, size, f_input_size, W_range, cuda=False):

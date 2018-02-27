@@ -78,17 +78,18 @@ class SigmoidLimitsPlotter:
 
 		self.initial_plot_done = False
 
-	def plot(self, min_xs, max_xs, labels=None):
+	def plot(self, min_xs, max_xs, actual_max_xs, actual_min_xs, labels=None):
 		if not self.initial_plot_done:
-			self.lines = [[None, None] for i in range(len(min_xs))]
+			self.lines = [[None, None, None, None] for i in range(len(min_xs))]
 			
 			for i in range(len(min_xs)):
 				if labels is None:
 					self.lines[i][0] = self.axes.axvline(min_xs[i], 0, 1, color=self.colors[i])
 				else:
 					self.lines[i][0] = self.axes.axvline(min_xs[i], 0, 1, color=self.colors[i], label=labels[i])
-				# print(self.lines[i][0])
 				self.lines[i][1] = self.axes.axvline(max_xs[i], 0, 1, color=self.colors[i])
+				self.lines[i][2] = self.axes.axvline(actual_min_xs[i], 0, 1, color=self.colors[i], ls='dashed')
+				self.lines[i][3] = self.axes.axvline(actual_max_xs[i], 0, 1, color=self.colors[i], ls='dashed')
 
 			# print(self.lines)
 			if labels is not None:
@@ -100,6 +101,8 @@ class SigmoidLimitsPlotter:
 			for i in range(len(min_xs)):
 				self.lines[i][0].set_xdata(min_xs[i])
 				self.lines[i][1].set_xdata(max_xs[i])
+				self.lines[i][2].set_xdata(actual_min_xs[i])
+				self.lines[i][3].set_xdata(actual_max_xs[i])
 
 		self.axes.relim()
 		self.axes.autoscale_view()
