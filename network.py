@@ -113,20 +113,20 @@ class hiddenLayer:
         self.burst_rate_prev = self.burst_rate
         self.burst_rate = self.burst_prob*self.event_rate
 
-        # if update_weights:
-        #     # calculate loss
-        #     loss = np.mean((self.burst_prob - self.burst_prob_prev)**2)
+        if update_weights and f_eta != 0:
+            # calculate loss
+            loss = np.mean((self.burst_prob - self.burst_prob_prev)**2)
 
-        #     E = (self.burst_rate - self.burst_rate_prev)*-1
+            E = (self.burst_rate - self.burst_rate_prev)*-self.event_rate*(1.0 - self.event_rate)
 
-        #     # update feedforward weights & biases
-        #     self.W -= f_eta*np.outer(E, self.f_input)
-        #     self.b -= f_eta*E
+            # update feedforward weights & biases
+            self.W -= f_eta*np.outer(E, self.f_input)
+            self.b -= f_eta*E
 
-        #     if troubleshooting:
-        #         pdb.set_trace()
+            if troubleshooting:
+                pdb.set_trace()
         # else:
-        #     loss = 0
+            # loss = 0
 
             # self.Z -= f_eta*((0.5 - self.u)-(self.u/self.q).ger(self.r))
 
@@ -170,19 +170,19 @@ class outputLayer:
 
         loss = 0
 
-        # if update_weights:
-        #     # calculate loss
-        #     loss = np.mean((self.burst_rate - self.burst_rate_prev)**2)
+        if update_weights and f_eta > 0:
+            # calculate loss
+            loss = np.mean((self.burst_rate - self.burst_rate_prev)**2)
 
-        #     E = (self.burst_rate - self.event_rate)*-(self.event_rate > self.baseline_event_rate).astype(int)
+            E = (self.burst_rate - self.event_rate)*-(self.event_rate > self.baseline_event_rate).astype(int)
 
-        #     # update feedforward weights & biases
-        #     self.W -= f_eta*np.outer(E, self.f_input)
-        #     self.b -= f_eta*E
+            # update feedforward weights & biases
+            self.W -= f_eta*np.outer(E, self.f_input)
+            self.b -= f_eta*E
 
-        #     if troubleshooting:
-        #         pdb.set_trace()
-        # else:
-        #     loss = 0
+            if troubleshooting:
+                pdb.set_trace()
+        else:
+            loss = 0
 
         return loss
