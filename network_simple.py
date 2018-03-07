@@ -105,7 +105,6 @@ class hiddenLayer:
         E_Z = (-self.u)*(self.u/c)
 
         self.Z -= r_eta*(np.outer(E_Z, self.event_rate) - (0.1 - self.Z))
-        # self.Z[self.Z < 0] = 0
 
         E_Y = -(2 - self.max_u)/Z_sum
 

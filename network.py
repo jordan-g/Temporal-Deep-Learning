@@ -37,14 +37,14 @@ class Network:
                     self.layers[layer_num].forward(self.layers[layer_num-1].event_rate_prev)
             self.layers[-1].forward(self.layers[-2].event_rate_prev)
 
-    def backward(self, t, f_etas, r_etas, update_final_weights=False, update_hidden_weights=False):
+    def backward(self, t, f_etas, r_etas, b_etas, update_final_weights=False, update_hidden_weights=False):
         losses = np.zeros(self.n_layers)
         if self.n_layers == 1:
             losses[0] = self.layers[0].backward(t, f_etas[0], update_weights=update_final_weights)
         else:
             losses[-1] = self.layers[-1].backward(t, f_etas[-1], update_weights=update_final_weights)
             for layer_num in range(self.n_layers-2, -1, -1):
-                losses[layer_num] = self.layers[layer_num].backward(self.layers[layer_num+1].burst_rate_prev, f_etas[layer_num], r_etas[layer_num], update_weights=update_hidden_weights)
+                losses[layer_num] = self.layers[layer_num].backward(self.layers[layer_num+1].burst_rate_prev, f_etas[layer_num], r_etas[layer_num], b_etas[layer_num], update_weights=update_hidden_weights)
 
         return losses
 
@@ -63,15 +63,15 @@ class hiddenLayer:
         # initialize feedback weights
         self.Y = Y_std*np.random.normal(0, 1, size=(self.size, self.b_input_size))
 
-        self.Z = Z_std*np.random.normal(0, 1, size=(self.size, self.size))
+        self.Z = Z_std*np.random.normal(0, 1, size=(self.size, self.size)) + 0.1
 
         self.f_input         = np.zeros(self.f_input_size)
         self.b_input         = np.zeros(self.b_input_size)
         self.event_rate      = np.zeros(self.size)
         self.burst_prob      = np.zeros(self.size)
         self.burst_prob_prev = np.zeros(self.size)
-        self.burst_rate      = np.zeros(self.size) + 0.02
-        self.burst_rate_prev = np.zeros(self.size) + 0.02
+        self.burst_rate      = np.zeros(self.size) + 0.2
+        self.burst_rate_prev = np.zeros(self.size) + 0.2
         self.u               = np.zeros(self.size)
 
     def forward(self, f_input):
@@ -83,7 +83,7 @@ class hiddenLayer:
         self.event_rate_prev = self.event_rate
         self.event_rate = expit(self.s)
 
-    def backward(self, b_input, f_eta, r_eta, update_weights=False):
+    def backward(self, b_input, f_eta, r_eta, b_eta, update_weights=False):
         self.b_input = b_input
 
         # print(self.burst_rate_prev)
@@ -93,11 +93,19 @@ class hiddenLayer:
         # update burst probability
         self.u = np.dot(self.Y, b_input)/c
 
+        self.max_u = np.sum(np.abs(self.Y), axis=1)/c
+
         E_Z = (-self.u)*(self.u/c)
 
-        self.Z -= r_eta*(np.outer(E_Z, self.burst_rate_prev) - 0.1*(0.01 - self.Z))
+        self.Z -= r_eta*(np.outer(E_Z, self.burst_rate_prev) - (0.1 - self.Z))
 
-        loss = 0.5*np.sum((self.u)**2) + 0.5*np.sum((0.01 - self.Z)**2)
+        E_Y = -(2 - self.max_u)/c
+
+        self.Y -= b_eta*((np.sign(self.Y).T * E_Y).T)
+
+        loss_Z = 0.5*np.sum((self.u)**2) + 0.5*np.sum((0.1 - self.Z)**2)
+
+        loss_Y = 0.5*np.sum((2 - self.max_u)**2)
         
         self.burst_prob_prev = self.burst_prob
         self.burst_prob      = expit(self.u)
@@ -122,7 +130,7 @@ class hiddenLayer:
 
             # self.Z -= f_eta*((0.5 - self.u)-(self.u/self.q).ger(self.r))
 
-        return loss
+        return loss_Y
 
 class outputLayer:
     def __init__(self, net, layer_num, size, f_input_size, W_std):
