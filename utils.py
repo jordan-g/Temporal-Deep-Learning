@@ -1,5 +1,4 @@
 import numpy as np
-import torch
 
 def load_mnist_data(n_examples, n_test_examples, validation=True):
     x_set      = np.load("mnist/x_train.npy").astype(np.float32)

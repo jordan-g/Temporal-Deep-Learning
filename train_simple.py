@@ -1,5 +1,4 @@
 import network_simple as network
-import torch
 import numpy as np
 import matplotlib.pyplot as plt
 import os
@@ -8,7 +7,7 @@ import time
 import datetime
 from plotter import Plotter, SigmoidLimitsPlotter
 
-def test(net, x_test_set, t_test_set, n_test_examples, n_layers, trial_num, epoch_num):
+def test(net, x_test_set, t_test_set, n_test_examples):
     # make a list of testing example indices
     test_example_indices = np.arange(n_test_examples)
 
@@ -95,12 +94,14 @@ def train(n_epochs, f_etas, r_etas, b_etas, n_hidden_units, W_range, Y_range, Z_
         f.write("Z range: {}\n".format(Z_range))
         f.write("Number of trials: {}\n\n".format(n_trials))
 
-    # initialize recording arrays
-    loss_plotter           = Plotter(title="Loss")
-    max_u_plotter          = Plotter(title="Maximum u")
-    sigmoid_limits_plotter = SigmoidLimitsPlotter(title="Sigmoid Limits")
-    mean_Z_plotter         = Plotter(title="Mean Z")
-    mean_Y_plotter         = Plotter(title="Mean Y")
+    # # initialize recording arrays
+    # loss_plotter           = Plotter(title="Loss")
+    # max_u_plotter          = Plotter(title="Maximum u")
+    # sigmoid_limits_plotter = SigmoidLimitsPlotter(title="Sigmoid Limits")
+    # mean_Z_plotter         = Plotter(title="Mean Z")
+    # mean_Y_plotter         = Plotter(title="Mean Y")
+    # max_r_plotter         = Plotter(title="Max event rate")
+    # mean_W_plotter        = Plotter(title="Mean W")
 
     losses = np.zeros((n_trials, n_layers, n_epochs*n_examples))
     max_us = np.zeros((n_trials, n_layers-1, n_epochs*int(n_examples/1000)))
@@ -126,7 +127,7 @@ def train(n_epochs, f_etas, r_etas, b_etas, n_hidden_units, W_range, Y_range, Z_
 
         # calculate the initial test error as a percentage
         # errors[trial_num, 0] = test(net, x_test_set, t_test_set, n_test_examples, n_layers, trial_num, 0)
-        errors[trial_num, 0] = test(net, x_test_set[:, :n_test_examples], t_test_set[:, :n_test_examples], n_test_examples, n_layers, trial_num, 0)
+        errors[trial_num, 0] = test(net, x_test_set[:, :n_test_examples], t_test_set[:, :n_test_examples], n_test_examples)
 
         # print test error
         print("Initial test error: {}.".format(errors[trial_num, 0]))
@@ -157,17 +158,21 @@ def train(n_epochs, f_etas, r_etas, b_etas, n_hidden_units, W_range, Y_range, Z_
                 net.forward(x)
 
                 # do a backward pass (with weight updates) and record the loss at each layer
-                losses[trial_num, :, epoch_num*n_examples + example_num] = net.backward(x, t, f_etas, r_etas, b_etas)
+                if epoch_num > 0 or example_num >= 2000:
+                    losses[trial_num, :, epoch_num*n_examples + example_num] = net.backward(x, t, f_etas, r_etas, b_etas)
+                else:
+                    losses[trial_num, :, epoch_num*n_examples + example_num] = net.backward(x, t, f_etas, r_etas, b_etas)
 
-                # update plots
-                loss_plotter.plot([losses[trial_num, i, epoch_num*n_examples + example_num] for i in range(n_layers-1)], labels=["Layer {}".format(i) for i in range(n_layers-1)])
-                # max_u_plotter.plot([max(np.amax(net.layers[i].u), np.amax(net.layers[i].u_t)) for i in range(n_layers-1)], labels=["Layer {}".format(i) for i in range(n_layers-1)])
-                max_u_plotter.plot([np.mean(net.layers[i].max_u) for i in range(n_layers-1)], labels=["Layer {}".format(i) for i in range(n_layers-1)])
-                mean_Z_plotter.plot([np.mean(net.layers[i].Z) for i in range(n_layers-1)], labels=["Layer {}".format(i) for i in range(n_layers-1)])
-                mean_Y_plotter.plot([np.mean(net.layers[i].Y) for i in range(n_layers-1)], labels=["Layer {}".format(i) for i in range(n_layers-1)])
-                # sigmoid_limits_plotter.plot([max(np.amax(net.layers[i].u), np.amax(net.layers[i].u_t)) for i in range(n_layers-1)], [min(np.amin(net.layers[i].u), np.amin(net.layers[i].u_t)) for i in range(n_layers-1)], labels=["Layer {}".format(i) for i in range(n_layers-1)])
-                sigmoid_limits_plotter.plot([np.amax(net.layers[i].max_u) for i in range(n_layers-1)], [-np.amax(net.layers[i].max_u) for i in range(n_layers-1)], [max(np.amax(net.layers[i].u), np.amax(net.layers[i].u_t)) for i in range(n_layers-1)], [min(np.amin(net.layers[i].u), np.amin(net.layers[i].u_t)) for i in range(n_layers-1)], labels=["Layer {}".format(i) for i in range(n_layers-1)])
-
+                # # update plots
+                # loss_plotter.plot([losses[trial_num, i, epoch_num*n_examples + example_num] for i in range(n_layers-1)], labels=["Layer {}".format(i) for i in range(n_layers-1)])
+                # # max_u_plotter.plot([max(np.amax(net.layers[i].u), np.amax(net.layers[i].u_t)) for i in range(n_layers-1)], labels=["Layer {}".format(i) for i in range(n_layers-1)])
+                # max_u_plotter.plot([np.mean(net.layers[i].max_u) for i in range(n_layers-1)], labels=["Layer {}".format(i) for i in range(n_layers-1)])
+                # mean_Z_plotter.plot([np.mean(net.layers[i].Z) for i in range(n_layers-1)], labels=["Layer {}".format(i) for i in range(n_layers-1)])
+                # mean_Y_plotter.plot([np.mean(net.layers[i].Y) for i in range(n_layers-1)], labels=["Layer {}".format(i) for i in range(n_layers-1)])
+                # # sigmoid_limits_plotter.plot([max(np.amax(net.layers[i].u), np.amax(net.layers[i].u_t)) for i in range(n_layers-1)], [min(np.amin(net.layers[i].u), np.amin(net.layers[i].u_t)) for i in range(n_layers-1)], labels=["Layer {}".format(i) for i in range(n_layers-1)])
+                # sigmoid_limits_plotter.plot([np.amax(net.layers[i].max_u) for i in range(n_layers-1)], [-np.amax(net.layers[i].max_u) for i in range(n_layers-1)], [max(np.amax(net.layers[i].u), np.amax(net.layers[i].u_t)) for i in range(n_layers-1)], [min(np.amin(net.layers[i].u), np.amin(net.layers[i].u_t)) for i in range(n_layers-1)], labels=["Layer {}".format(i) for i in range(n_layers-1)])
+                # max_r_plotter.plot([np.amax(net.layers[i].event_rate) for i in range(n_layers)], labels=["Layer {}".format(i) for i in range(n_layers)])
+                # mean_W_plotter.plot([np.mean(net.layers[i].W) for i in range(n_layers)], labels=["Layer {}".format(i) for i in range(n_layers)])
                 # print progress every 1000 examples
                 if (example_num+1) % 1000 == 0:
                     if n_layers > 1:
@@ -175,14 +180,14 @@ def train(n_epochs, f_etas, r_etas, b_etas, n_hidden_units, W_range, Y_range, Z_
                     else:
                         print("{}Trial {:>3d}, epoch {:>3d}, example {:>5d}. Avg. output loss: {:.10f}.".format(suffix + ". "*(len(suffix)>0), trial_num+1, epoch_num+1, example_num+1, np.mean(losses[trial_num, -1, epoch_num*n_examples + example_num - 999:epoch_num*n_examples + example_num])))
 
-                    error = test(net, x_set[:, :n_test_examples], t_set[:, :n_test_examples], n_test_examples, n_layers, trial_num, epoch_num+1)
+                    error = test(net, x_set[:, :n_test_examples], t_set[:, :n_test_examples], n_test_examples)
 
                     # print test error
                     print("Epoch {} test error: {}.".format(epoch_num+1, error))
 
             # calculate the test error as a percentage
             # errors[trial_num, epoch_num+1] = test(net, x_test_set, t_test_set, n_test_examples, n_layers, trial_num, epoch_num+1)
-            errors[trial_num, epoch_num+1] = test(net, x_set[:, :n_test_examples], t_set[:, :n_test_examples], n_test_examples, n_layers, trial_num, epoch_num+1)
+            errors[trial_num, epoch_num+1] = test(net, x_set[:, :n_test_examples], t_set[:, :n_test_examples], n_test_examples)
 
             # print test error
             print("Epoch {} test error: {}.".format(epoch_num+1, errors[trial_num, epoch_num+1]))
@@ -210,12 +215,12 @@ if __name__ == "__main__":
     n_trials = 1
 
     # initial weight magnitudes
-    Y_ranges = [1.0, 1.0]
+    Y_ranges = [20*10.0, 20*1.0]
     Z_ranges = [0.1, 0.1]
     W_ranges = [0.01, 0.01, 0.01]
 
     n_hidden_units = [500, 300] # number of units per hidden layer
-    f_etas         = [0, 0, 0]  # feedforward learning rates
+    f_etas         = [0.5, 0.001, 0.01]  # feedforward learning rates
     r_etas         = [0.1, 0.1] # recurrent learning rates
     b_etas         = [0.1, 0.1] # feedback learning rates
     suffix         = "1_hidden" # suffix to append to files

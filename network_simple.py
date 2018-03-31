@@ -6,6 +6,12 @@ from scipy import interpolate
 from scipy.special import expit
 import pdb
 
+def softplus(x, limit=30):
+    y = x.copy()
+    y[x <= limit] = np.log(1.0 + np.exp(x[x <= limit]))
+    
+    return y
+
 class Network:
     def __init__(self, n, n_in, W_ranges, Y_ranges, Z_ranges):
         self.n        = n           # layer sizes - eg. (500, 100, 10)
@@ -55,14 +61,14 @@ class hiddenLayer:
         self.b_input_size = b_input_size
 
         # initialize feedforward weights & biases
-        self.W = W_range*np.random.normal(0, 1, size=(self.size, self.f_input_size))
+        self.W = np.random.normal(0, W_range, size=(self.size, self.f_input_size))
         self.b = np.zeros(self.size)
 
         # initialize feedback weights
-        self.Y = Y_range*np.random.normal(0, 1, size=(self.size, self.b_input_size))
+        self.Y = np.random.normal(0, Y_range, size=(self.size, self.b_input_size))
 
         # self.Q = W_range*np.ones((self.size, self.size))/np.sqrt(self.size)
-        self.Z = Z_range*np.random.normal(0, 1, size=(self.size, self.size)) + 0.1
+        self.Z = np.random.normal(0, Z_range, size=(self.size, self.size)) + 0.1
 
         # print(np.mean(self.Z))
         # self.d = np.zeros(self.size)
@@ -81,19 +87,19 @@ class hiddenLayer:
 
         self.s = np.dot(self.W, self.f_input) + self.b
 
-        self.event_rate = expit(self.s)
+        self.event_rate = softplus(self.s)
 
     def backward(self, b_input, target_input, f_eta, r_eta, b_eta):
         c = np.dot(self.Z, self.event_rate)
 
-        self.u   = np.dot(self.Y, b_input)/c
-        self.u_t = np.dot(self.Y, target_input)/c
+        if self.layer_num == self.net.n_layers-2:
+            self.u   = np.dot(self.Y, b_input*0.2*(b_input > 0.0001).astype(int))/c
+            self.u_t = np.dot(self.Y, target_input*0.2*(b_input > 0.0001).astype(int))/c
+        else:
+            self.u   = np.dot(self.Y, b_input)/c
+            self.u_t = np.dot(self.Y, target_input)/c
 
-        Z_sum = c
-
-        # print(np.mean(c))
-
-        self.max_u = np.sum(np.abs(self.Y), axis=1)/Z_sum
+        self.max_u = np.sum(np.abs(self.Y), axis=1)/c
 
         # update burst probability
         self.burst_prob   = expit(self.u)
@@ -106,7 +112,7 @@ class hiddenLayer:
 
         self.Z -= r_eta*(np.outer(E_Z, self.event_rate) - (0.1 - self.Z))
 
-        E_Y = -(2 - self.max_u)/Z_sum
+        E_Y = -(2 - self.max_u)/c
 
         self.Y -= b_eta*((np.sign(self.Y).T * E_Y).T)
         # self.Y[self.Y < 0] = 0
@@ -116,11 +122,11 @@ class hiddenLayer:
 
         loss_Y = 0.5*np.sum((2 - self.max_u)**2)
 
-        # E = (self.burst_rate_t - self.burst_rate)*-self.event_rate*(1.0 - self.event_rate)
+        E = (self.burst_rate_t - self.burst_rate)*-1
 
         # update feedforward weights & biases
-        # self.W -= f_eta*np.outer(E, self.f_input)
-        # self.b -= f_eta*E
+        self.W -= f_eta*np.outer(E, self.f_input)
+        self.b -= f_eta*E
 
         return loss_Y
 
@@ -132,7 +138,7 @@ class outputLayer:
         self.f_input_size = f_input_size
 
         # initialize feedforward weights & biases
-        self.W = W_range*np.random.normal(0, 1, size=(self.size, self.f_input_size))
+        self.W = np.random.normal(0, W_range, size=(self.size, self.f_input_size))
         self.b = np.zeros(self.size)
 
         self.f_input    = np.zeros(self.f_input_size)
@@ -147,7 +153,7 @@ class outputLayer:
         self.f_input = f_input
 
         self.event_rate = np.dot(self.W, self.f_input) + self.b
-        self.event_rate[self.event_rate < self.baseline_event_rate] = self.baseline_event_rate
+        self.event_rate[self.event_rate <= self.baseline_event_rate] = self.baseline_event_rate
 
     def backward(self, t, f_eta):
         # calculate loss
@@ -158,11 +164,11 @@ class outputLayer:
 
         loss = np.mean(((self.burst_rate_t - self.burst_rate))**2)
 
-        # E = (self.burst_rate_t - self.burst_rate)*-self.burst_prob*(self.event_rate > self.baseline_event_rate).astype(int)
+        E = (self.burst_rate_t - self.burst_rate)*-self.burst_prob*((self.event_rate > self.baseline_event_rate).astype(int))
         # E = (self.burst_rate_t - self.burst_rate)*-self.burst_prob
 
         # update feedforward weights & biases
-        # self.W -= f_eta*np.outer(E, self.f_input)
-        # self.b -= f_eta*E
+        self.W -= f_eta*np.outer(E, self.f_input)
+        self.b -= f_eta*E
 
         return loss
