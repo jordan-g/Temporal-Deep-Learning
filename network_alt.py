@@ -12,14 +12,14 @@ from plotter import Plotter, SigmoidLimitsPlotter
 folder       = "alt_test"
 validation   = True
 dynamic_plot = False
-n_units      = [784, 500, 10]
 n_epochs     = 50
 n_trials     = 1
 
 # hyperparameters
+n_units           = [784, 500, 10]
 W_std             = [0, 0.1, 0.1]
 Z_std             = [0, 0.1]
-Y_std             = [0, 1.0]
+Y_std             = [0, 10.0]
 f_etas            = [0, 0.01, 0.01]
 r_etas            = [0, 0.01]
 b_etas            = [0, 0.01]
