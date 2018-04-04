@@ -18,7 +18,7 @@ dynamic_plot = False
 n_epochs     = 50
 
 # hyperparameters
-n_units           = [784, 500, 300, 10]
+n_units           = [784, 500, 300,  10]
 W_std             = [0, 0.1, 0.1, 0.1]
 Z_std             = [0, 0.1, 0.1]
 Y_std             = [0, 1.0, 1.0]
