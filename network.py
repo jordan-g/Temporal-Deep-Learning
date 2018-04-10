@@ -13,6 +13,9 @@ import pickle
 import torch
 from torch.autograd import Variable
 from comet_ml import Experiment
+import time
+
+use_comet = False # whether to use Comet.ml
 
 cuda = torch.cuda.is_available()
 if cuda:
@@ -23,25 +26,50 @@ else:
     print("Not using CUDA.")
 
 # training variables
-validation   = True
-dynamic_plot = False
-n_epochs     = 50
-
-# hyperparameters
-n_units           = [784, 500, 300, 10]
-W_std             = [0, 0.1, 0.1, 0.1]
-Z_std             = [0, 0.1, 0.1]
-Y_std             = [0, 1.0, 1.0]
-f_etas            = [0, 0.1, 0.1, 0.1]
-b_etas            = [0, 0.01, 0.01]
-r_etas            = [0, 0.01, 0.01]
-output_burst_prob = 0.2
-min_Z             = 0.1
-u_range           = 2
-W_decay           = 0
+validation   = True  # whether to use validation set
+dynamic_plot = False # whether to plot variables as training occurs
+n_epochs     = 50    # number of epochs
 
 # number of layers
-n_layers = len(n_units)
+n_layers = 3
+
+# hyperparameters
+if n_layers == 2: # No hidden layers
+    n_units           = [784, 10]
+    W_std             = [0, 0.01]
+    Z_std             = [0]
+    Y_std             = [0]
+    f_etas            = [0, 0.1]
+    r_etas            = [0]
+    b_etas            = [0]
+    output_burst_prob = 0.2
+    min_Z             = 0.1
+    u_range           = 2
+    W_decay           = 0
+elif n_layers == 3: # One hidden layer
+    n_units           = [784, 500, 10]
+    W_std             = [0, 0.05, 0.01]
+    Z_std             = [0, 0.01]
+    Y_std             = [0, 0.1]
+    f_etas            = [0, 0.01, 0.01]
+    r_etas            = [0, 0.0]
+    b_etas            = [0, 0.0]
+    output_burst_prob = 0.2
+    min_Z             = 0.1
+    u_range           = 2
+    W_decay           = 0
+elif n_layers == 4: # Two hidden layers
+    n_units           = [784, 500, 300, 10]
+    W_std             = [0, 0.1, 0.1, 0.1]
+    Z_std             = [0, 0.1, 0.1]
+    Y_std             = [0, 1.0, 1.0]
+    f_etas            = [0, 0.1, 0.1, 0.1]
+    b_etas            = [0, 0.01, 0.01]
+    r_etas            = [0, 0.01, 0.01]
+    output_burst_prob = 0.2
+    min_Z             = 0.1
+    u_range           = 2
+    W_decay           = 0
 
 if type(f_etas) in (int, float):
     f_etas = [0] + [ f_etas for i in range(1, n_layers) ]
@@ -90,7 +118,7 @@ def create_dynamic_variables(symmetric_weights=False):
     p_t    = [0] + [ torch.from_numpy(np.zeros(n_units[i])).type(dtype) for i in range(1, n_layers) ]
     beta   = [0] + [ torch.from_numpy(np.zeros(n_units[i])).type(dtype) for i in range(1, n_layers) ]
     beta_t = [0] + [ torch.from_numpy(np.zeros(n_units[i])).type(dtype) for i in range(1, n_layers) ]
-    mean_c = [0] + [ torch.from_numpy(np.zeros(n_units[i])).type(dtype) for i in range(1, n_layers-1) ]
+    mean_c = [0] + [ torch.from_numpy(np.zeros((n_units[i], 1))).type(dtype) for i in range(1, n_layers-1) ]
 
     return W, b, Y, Z, v, h, u, u_t, p, p_t, beta, beta_t, mean_c
 
@@ -236,12 +264,12 @@ def backward(Y, Z, W, b, u, u_t, p, p_t, beta, beta_t, v, h, mean_c, t_input):
             beta[i]   = output_burst_prob*h[i]
             beta_t[i] = output_burst_prob*t_input.unsqueeze(1)
 
-            cost[i] = 0.5*torch.sum((beta_t[i] - beta[i])**2)
-            e          = -(beta_t[i] - beta[i])*output_burst_prob*output_burst_prob*relu_deriv(v[i])
+            cost[i]    = 0.5*torch.sum((beta_t[i] - beta[i])**2)
+            e          = -(beta_t[i] - beta[i])*output_burst_prob*relu_deriv(h[i])
             delta_W[i] = e.mm(h[i-1].transpose(0, 1))
             delta_b[i] = e
 
-            delta_b_backprop[i] = -(beta_t[i] - beta[i])*output_burst_prob*relu_deriv(v[i])
+            delta_b_backprop[i] = -(beta_t[i] - beta[i])*output_burst_prob*relu_deriv(h[i])
         else:
             c = Z[i].mm(h[i])
 
@@ -249,12 +277,12 @@ def backward(Y, Z, W, b, u, u_t, p, p_t, beta, beta_t, v, h, mean_c, t_input):
 
             if i == n_layers-2:
                 u[i]   = Y[i].mm(beta[i+1]*output_burst_prob*relu_deriv(beta[i+1]))/c
-                u_t[i] = Y[i].mm(beta_t[i+1]*output_burst_prob*relu_deriv(beta[i+1]))/c
+                u_t[i] = Y[i].mm(beta_t[i+1]*output_burst_prob*relu_deriv(beta_t[i+1]))/c
             else:
                 u[i]   = Y[i].mm(beta[i+1])/c
                 u_t[i] = Y[i].mm(beta_t[i+1])/c
 
-            max_u[i] = torch.sum(torch.abs(Y[i]), dim=1)/mean_c[i]
+            max_u[i] = torch.sum(torch.abs(Y[i]), dim=1).unsqueeze(1)/mean_c[i]
 
             p[i]   = torch.sigmoid(u[i])
             p_t[i] = torch.sigmoid(u_t[i])
@@ -279,7 +307,7 @@ def backward(Y, Z, W, b, u, u_t, p, p_t, beta, beta_t, v, h, mean_c, t_input):
 
     return cost, cost_Y, cost_Z, delta_W, delta_b, delta_Y, delta_Z, max_u, delta_b_backprop
 
-def train(path=None, continuing_path=None, use_comet=True):
+def train(path=None, continuing_path=None):
     if path is not None and path == continuing_path:
         print("Error: If you're continuing a simulation, the new results need to be saved in a different directory.")
         raise
@@ -354,6 +382,8 @@ def train(path=None, continuing_path=None, use_comet=True):
         save_results(path, costs, backprop_angles, errors)
 
     for epoch_num in range(n_epochs):
+        start_time = time.time()
+        
         if use_comet:
             experiment.log_current_epoch(epoch_num)
 
@@ -382,10 +412,10 @@ def train(path=None, continuing_path=None, use_comet=True):
             cost, cost_Y, cost_Z, delta_W, delta_b, delta_Y, delta_Z, max_u, delta_b_backprop = backward(Y, Z, W, b, u, u_t, p, p_t, beta, beta_t, v, h, mean_c, t_input=t)
             costs[:, epoch_num*n_examples + example_num] = cost
 
-            backprop_angle = np.array([ (180/np.pi)*np.arccos(delta_b_backprop[i].squeeze().dot(delta_b[i].squeeze())/(1e-6 + torch.norm(delta_b_backprop[i])*torch.norm(delta_b[i]))) for i in range(1, n_layers-1) ])
+            backprop_angle = np.array([ (180/np.pi)*np.arccos(delta_b_backprop[i].squeeze().dot(delta_b[i].squeeze())/(1e-10 + torch.norm(delta_b_backprop[i])*torch.norm(delta_b[i]))) for i in range(1, n_layers-1) ])
             backprop_angles[:, epoch_num*n_examples + example_num] = backprop_angle
-            min_us[:, epoch_num*n_examples + example_num] = np.array([ torch.min(u[i]) for i in range(1, n_layers-1) ])
-            max_us[:, epoch_num*n_examples + example_num] = np.array([ torch.max(u[i]) for i in range(1, n_layers-1) ])
+            min_us[:, epoch_num*n_examples + example_num] = np.array([ min(torch.min(u[i]), torch.min(u_t[i])) for i in range(1, n_layers-1) ])
+            max_us[:, epoch_num*n_examples + example_num] = np.array([ max(torch.max(u[i]), torch.max(u_t[i])) for i in range(1, n_layers-1) ])
             min_hs[:, epoch_num*n_examples + example_num] = np.array([ torch.min(h[i]) for i in range(1, n_layers) ])
             max_hs[:, epoch_num*n_examples + example_num] = np.array([ torch.max(h[i]) for i in range(1, n_layers) ])
 
@@ -405,8 +435,6 @@ def train(path=None, continuing_path=None, use_comet=True):
             update_weights(W, b, Y, Z, delta_W, delta_b, delta_Y, delta_Z)
 
             if (example_num+1) % 1000 == 0:
-                print("Epoch {}, ex {}.".format(epoch_num+1, example_num+1))
-                
                 error = test(W, b)
 
                 # print test error
@@ -429,10 +457,9 @@ def train(path=None, continuing_path=None, use_comet=True):
             save_dynamic_variables(path, W, b, Y, Z, v, h, u, u_t, p, p_t, beta, beta_t, mean_c)
             save_results(path, costs, backprop_angles, errors)
 
-    if csv_path is not None:
-        with open(csv_path, 'a', newline='') as csvfile:
-            writer = csv.writer(csvfile, delimiter=' ')
-            writer.writerow([])
+        end_time = time.time()
+
+        print("Elapsed time: {} s.".format(end_time - start_time))
 
     return costs, backprop_angles, errors
 

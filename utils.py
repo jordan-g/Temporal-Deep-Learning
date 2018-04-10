@@ -1,17 +1,68 @@
 import numpy as np
+import mnist
 
 def load_mnist_data(n_examples, n_test_examples, validation=True):
-    x_set      = np.load("mnist/x_train.npy").astype(np.float32)
-    t_set      = np.load("mnist/t_train.npy").astype(np.float32)
-    if validation:
-        x_test_set = x_set[:, n_examples:n_examples+n_test_examples]
-        t_test_set = t_set[:, n_examples:n_examples+n_test_examples]
-    else:
-        x_test_set = np.load("mnist/x_test.npy").astype(np.float32)[:, :n_test_examples]
-        t_test_set = np.load("mnist/t_test.npy").astype(np.float32)[:, :n_test_examples]
+    try:
+        x_set      = np.load("mnist/x_set.npy").astype(np.float32)
+        t_set      = np.load("mnist/t_set.npy").astype(np.float32)
+        if validation:
+            x_test_set = x_set[:, n_examples:n_examples+n_test_examples]
+            t_test_set = t_set[:, n_examples:n_examples+n_test_examples]
+        else:
+            x_test_set = np.load("mnist/x_test_set.npy").astype(np.float32)[:, :n_test_examples]
+            t_test_set = np.load("mnist/t_test_set.npy").astype(np.float32)[:, :n_test_examples]
 
-    x_set = x_set[:, :n_examples]
-    t_set = t_set[:, :n_examples]
+        x_set = x_set[:, :n_examples]
+        t_set = t_set[:, :n_examples]
+    except:
+        import mnist
+        
+        try:
+            trainfeatures, trainlabels = mnist.traindata()
+            testfeatures, testlabels   = mnist.testdata()
+        except:
+            print("Error: Could not find original MNIST files in the current directory.")
+            return
+        
+        # normalize inputs
+        x_set      = trainfeatures/255.0
+        x_test_set = testfeatures/255.0
+        
+        t_set = np.zeros((10, x_set.shape[1])).astype(int)
+        for i in range(x_set.shape[1]):
+            t_set[int(trainlabels[i]), i] = 1
+        
+        t_test_set = np.zeros((10, x_test_set.shape[1])).astype(int)
+        for i in range(x_test_set.shape[1]):
+            t_test_set[int(testlabels[i]), i] = 1
+        try:
+            import mnist
+            
+            try:
+                trainfeatures, trainlabels = mnist.traindata()
+                testfeatures, testlabels   = mnist.testdata()
+            except:
+                print("Error: Could not find original MNIST files in the current directory.")
+                return
+            
+            # normalize inputs
+            x_set      = trainfeatures/255.0
+            x_test_set = testfeatures/255.0
+            
+            t_set = np.zeros((10, x_set.shape[1])).astype(int)
+            for i in range(x_set.shape[1]):
+                t_set[int(trainlabels[i]), i] = 1
+            
+            t_test_set = np.zeros((10, x_test_set.shape[1])).astype(int)
+            for i in range(x_test_set.shape[1]):
+                t_test_set[int(testlabels[i]), i] = 1
+        except:
+            return
+
+        np.save("mnist/x_set", x_set)
+        np.save("mnist/x_test_set", x_test_set)
+        np.save("mnist/t_set", t_set)
+        np.save("mnist/t_test_set", t_test_set)
 
     return x_set, t_set, x_test_set, t_test_set
 
