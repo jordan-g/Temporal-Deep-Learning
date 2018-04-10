@@ -93,154 +93,17 @@ t_set      = torch.from_numpy(t_set).type(dtype)
 x_test_set = torch.from_numpy(x_test_set).type(dtype)
 t_test_set = torch.from_numpy(t_test_set).type(dtype)
 
-def create_training_data():
-    # load MNIST data
-    x_set, t_set, x_test_set, t_test_set = utils.load_mnist_data(n_examples, n_test_examples, validation=validation)
-    x_set      = torch.from_numpy(x_set).type(dtype)
-    t_set      = torch.from_numpy(t_set).type(dtype)
-    x_test_set = torch.from_numpy(x_test_set).type(dtype)
-    t_test_set = torch.from_numpy(t_test_set).type(dtype)
+def softplus(x, limit=30):
+    return torch.nn.functional.softplus(Variable(x)).data
 
-def create_dynamic_variables(symmetric_weights=False):
-    # create network variables
-    W      = [0] + [ torch.from_numpy(np.random.normal(0, W_std[i], size=(n_units[i], n_units[i-1]))).type(dtype) for i in range(1, n_layers) ]
-    W[-1] += 0.001
-    b      = [0] + [ torch.from_numpy(np.zeros((n_units[i], 1))).type(dtype) for i in range(1, n_layers) ]
-    if symmetric_weights:
-        Y  = [0] + [ torch.from_numpy(W[i+1].T.copy()).type(dtype) for i in range(1, n_layers-1) ]
-    else:
-        Y  = [0] + [ torch.from_numpy(np.random.normal(0, Y_std[i], size=(n_units[i], n_units[i+1]))).type(dtype) for i in range(1, n_layers-1) ]
-    Z      = [0] + [ torch.from_numpy(np.random.uniform(0, Z_std[i], size=(n_units[i], n_units[i]))).type(dtype) for i in range(1, n_layers-1) ]
-    v      = [0] + [ torch.from_numpy(np.zeros(n_units[i])).type(dtype) for i in range(1, n_layers) ]
-    h      = [0] + [ torch.from_numpy(np.zeros(n_units[i])).type(dtype) for i in range(1, n_layers) ]
-    u      = [0] + [ torch.from_numpy(np.zeros(n_units[i])).type(dtype) for i in range(1, n_layers) ]
-    u_t    = [0] + [ torch.from_numpy(np.zeros(n_units[i])).type(dtype) for i in range(1, n_layers) ]
-    p      = [0] + [ torch.from_numpy(np.zeros(n_units[i])).type(dtype) for i in range(1, n_layers) ]
-    p_t    = [0] + [ torch.from_numpy(np.zeros(n_units[i])).type(dtype) for i in range(1, n_layers) ]
-    beta   = [0] + [ torch.from_numpy(np.zeros(n_units[i])).type(dtype) for i in range(1, n_layers) ]
-    beta_t = [0] + [ torch.from_numpy(np.zeros(n_units[i])).type(dtype) for i in range(1, n_layers) ]
-    mean_c = [0] + [ torch.from_numpy(np.zeros((n_units[i], 1))).type(dtype) for i in range(1, n_layers-1) ]
+def softplus_deriv(x):
+    return torch.nn.functional.sigmoid(Variable(x)).data
 
-    return W, b, Y, Z, v, h, u, u_t, p, p_t, beta, beta_t, mean_c
+def relu(x, baseline=0):
+    return torch.nn.functional.relu(Variable(x)).data
 
-def load_dynamic_variables(path):
-    W      = pickle.load(open(os.path.join(path, "W.pkl"), 'rb'))
-    b      = pickle.load(open(os.path.join(path, "b.pkl"), 'rb'))
-    Y      = pickle.load(open(os.path.join(path, "Y.pkl"), 'rb'))
-    Z      = pickle.load(open(os.path.join(path, "Z.pkl"), 'rb'))
-    v      = pickle.load(open(os.path.join(path, "v.pkl"), 'rb'))
-    h      = pickle.load(open(os.path.join(path, "h.pkl"), 'rb'))
-    u      = pickle.load(open(os.path.join(path, "u.pkl"), 'rb'))
-    u_t    = pickle.load(open(os.path.join(path, "u_t.pkl"), 'rb'))
-    p      = pickle.load(open(os.path.join(path, "p.pkl"), 'rb'))
-    p_t    = pickle.load(open(os.path.join(path, "p_t.pkl"), 'rb'))
-    beta   = pickle.load(open(os.path.join(path, "beta.pkl"), 'rb'))
-    beta_t = pickle.load(open(os.path.join(path, "beta_t.pkl"), 'rb'))
-    mean_c = pickle.load(open(os.path.join(path, "mean_c.pkl"), 'rb'))
-
-    return W, b, Y, Z, v, h, u, u_t, p, p_t, beta, beta_t, mean_c
-
-def save_dynamic_variables(path, W, b, Y, Z, v, h, u, u_t, p, p_t, beta, beta_t, mean_c):
-    pickle.dump(W, open(os.path.join(path, "W.pkl"), 'wb'))
-    pickle.dump(b, open(os.path.join(path, "b.pkl"), 'wb'))
-    pickle.dump(Y, open(os.path.join(path, "Y.pkl"), 'wb'))
-    pickle.dump(Z, open(os.path.join(path, "Z.pkl"), 'wb'))
-    pickle.dump(v, open(os.path.join(path, "v.pkl"), 'wb'))
-    pickle.dump(h, open(os.path.join(path, "h.pkl"), 'wb'))
-    pickle.dump(u, open(os.path.join(path, "u.pkl"), 'wb'))
-    pickle.dump(u_t, open(os.path.join(path, "u_t.pkl"), 'wb'))
-    pickle.dump(p, open(os.path.join(path, "p.pkl"), 'wb'))
-    pickle.dump(p_t, open(os.path.join(path, "p_t.pkl"), 'wb'))
-    pickle.dump(beta, open(os.path.join(path, "beta.pkl"), 'wb'))
-    pickle.dump(beta_t, open(os.path.join(path, "beta_t.pkl"), 'wb'))
-    pickle.dump(mean_c, open(os.path.join(path, "mean_c.pkl"), 'wb'))
-
-def save_results(path, costs, backprop_angles, errors):
-    pickle.dump(costs, open(os.path.join(path, "costs.pkl"), 'wb'))
-    pickle.dump(backprop_angles, open(os.path.join(path, "backprop_angles.pkl"), 'wb'))
-    pickle.dump(errors, open(os.path.join(path, "errors.pkl"), 'wb'))
-
-def gradient_check():
-    W, b, Y, Z, v, h, u, u_t, p, p_t, beta, beta_t, mean_c = create_dynamic_variables(symmetric_weights=True)
-
-    # get input and target
-    x = x_set[:, 0]
-    t = t_set[:, 0]
-
-    # get the calculated delta values
-    forward(W, b, v, h, f_input=x)
-    cost, cost_Y, cost_Z, delta_W, delta_b, delta_Y, delta_Z, max_u, delta_b_backprop = backward(Y, Z, W, b, u, u_t, p, p_t, beta, beta_t, v, h, mean_c, t_input=t)
-
-    # decrease and increase weights slightly, compare with delta values
-    numerical_delta_W = [0] + [ torch.from_numpy(np.zeros(W[i].shape)).type(dtype) for i in range(1, n_layers) ]
-    epsilon = 0.0001
-    for i in range(1, n_layers):
-        for j in range(W[i].shape[0]):
-            for k in range(W[i].shape[1]):
-                percent = 100*(j*W[i].shape[1] + k)/(W[i].shape[0]*W[i].shape[1])
-                if percent % 5 == 0:
-                    print("Computing numerical gradient for layer {}... {}% done.".format(i, percent))
-                
-                W[i][j, k] -= epsilon
-
-                if i > 1:
-                    Y[i-1][k, j] -= epsilon
-
-                forward(W, b, v, h, f_input=x)
-                beta   = output_burst_prob*h[-1]
-                beta_t = output_burst_prob*t
-                cost_minus = 0.5*torch.sum((beta_t - beta)**2)
-
-                W[i][j, k] += 2*epsilon
-
-                if i > 1:
-                    Y[i-1][k, j] += 2*epsilon
-
-                forward(W, b, v, h, f_input=x)
-                beta   = output_burst_prob*h[-1]
-                beta_t = output_burst_prob*t
-                cost_plus = 0.5*torch.sum((beta_t - beta)**2)
-
-                numerical_delta_W[i][j, k] = (cost_plus - cost_minus)/(2*epsilon)
-
-                W[i][j, k] -= epsilon
-
-                if i > 1:
-                    Y[i-1][k, j] -= epsilon
-
-    print([ torch.mean(torch.abs((delta_W[i] - numerical_delta_W[i]))) for i in range(1, n_layers) ])
-
-def test(W, b):
-    v = [0] + [ torch.from_numpy(np.zeros(n_units[i])).type(dtype) for i in range(1, n_layers) ]
-    h = [0] + [ torch.from_numpy(np.zeros(n_units[i])).type(dtype) for i in range(1, n_layers) ]
-
-    # initialize error
-    error = 0
-    cost = 0
-    for i in range(n_test_examples):
-        # get input and target for this test example
-        x = x_test_set[:, i]
-        t = t_test_set[:, i]
-
-        # do a forward pass
-        forward(W, b, v, h, f_input=x)
-
-        # compute cost
-        beta   = output_burst_prob*h[-1]
-        beta_t = output_burst_prob*t.unsqueeze(1)
-        cost += 0.5*torch.sum((beta_t - beta)**2)
-
-        # get the predicted & target class
-        predicted_class = int(torch.max(h[-1], 0)[1])
-        target_class    = int(torch.max(t, 0)[1])
-
-        # update the test error
-        if predicted_class != target_class:
-            error += 1
-
-    cost /= n_test_examples
-
-    return 100.0*error/n_test_examples, cost
+def relu_deriv(x, baseline=0):
+    return torch.gt(x, baseline).type(dtype)
 
 def forward(W, b, v, h, f_input):
     h[0] = f_input.unsqueeze(1)
@@ -314,6 +177,17 @@ def backward(Y, Z, W, b, u, u_t, p, p_t, beta, beta_t, v, h, mean_c, t_input):
             delta_Z[i] = (-u[i])*(u[i]/c).mm(h[i].transpose(0, 1)) - (min_Z - Z[i])
 
     return cost, cost_Y, cost_Z, delta_W, delta_b, delta_Y, delta_Z, max_u, delta_b_backprop
+
+
+def update_weights(W, b, Y, Z, delta_W, delta_b, delta_Y, delta_Z):
+    for i in range(1, n_layers):
+        W[i] -= f_etas[i]*(delta_W[i] + W_decay*W[i])
+        b[i] -= f_etas[i]*(delta_b[i] + W_decay*b[i])
+
+        if i < n_layers-1:
+            Y[i] -= b_etas[i]*delta_Y[i]
+            Z[i] -= r_etas[i]*delta_Z[i]
+            Z[i][Z[i] < 0] = 0
 
 def train(path=None, continuing_path=None):
     if path is not None and path == continuing_path:
@@ -472,6 +346,38 @@ def train(path=None, continuing_path=None):
 
     return costs, backprop_angles, errors
 
+def test(W, b):
+    v = [0] + [ torch.from_numpy(np.zeros(n_units[i])).type(dtype) for i in range(1, n_layers) ]
+    h = [0] + [ torch.from_numpy(np.zeros(n_units[i])).type(dtype) for i in range(1, n_layers) ]
+
+    # initialize error
+    error = 0
+    cost = 0
+    for i in range(n_test_examples):
+        # get input and target for this test example
+        x = x_test_set[:, i]
+        t = t_test_set[:, i]
+
+        # do a forward pass
+        forward(W, b, v, h, f_input=x)
+
+        # compute cost
+        beta   = output_burst_prob*h[-1]
+        beta_t = output_burst_prob*t.unsqueeze(1)
+        cost += 0.5*torch.sum((beta_t - beta)**2)
+
+        # get the predicted & target class
+        predicted_class = int(torch.max(h[-1], 0)[1])
+        target_class    = int(torch.max(t, 0)[1])
+
+        # update the test error
+        if predicted_class != target_class:
+            error += 1
+
+    cost /= n_test_examples
+
+    return 100.0*error/n_test_examples, cost
+
 def plot_backprop_angles(backprop_angles, filename=None):
     plt.figure()
     for i in range(1, n_layers-1):
@@ -483,24 +389,120 @@ def plot_backprop_angles(backprop_angles, filename=None):
     else:
         plt.show()
 
-def update_weights(W, b, Y, Z, delta_W, delta_b, delta_Y, delta_Z):
+def gradient_check():
+    W, b, Y, Z, v, h, u, u_t, p, p_t, beta, beta_t, mean_c = create_dynamic_variables(symmetric_weights=True)
+
+    # get input and target
+    x = x_set[:, 0]
+    t = t_set[:, 0]
+
+    # get the calculated delta values
+    forward(W, b, v, h, f_input=x)
+    cost, cost_Y, cost_Z, delta_W, delta_b, delta_Y, delta_Z, max_u, delta_b_backprop = backward(Y, Z, W, b, u, u_t, p, p_t, beta, beta_t, v, h, mean_c, t_input=t)
+
+    # decrease and increase weights slightly, compare with delta values
+    numerical_delta_W = [0] + [ torch.from_numpy(np.zeros(W[i].shape)).type(dtype) for i in range(1, n_layers) ]
+    epsilon = 0.0001
     for i in range(1, n_layers):
-        W[i] -= f_etas[i]*(delta_W[i] + W_decay*W[i])
-        b[i] -= f_etas[i]*(delta_b[i] + W_decay*b[i])
+        for j in range(W[i].shape[0]):
+            for k in range(W[i].shape[1]):
+                percent = 100*(j*W[i].shape[1] + k)/(W[i].shape[0]*W[i].shape[1])
+                if percent % 5 == 0:
+                    print("Computing numerical gradient for layer {}... {}% done.".format(i, percent))
+                
+                W[i][j, k] -= epsilon
 
-        if i < n_layers-1:
-            Y[i] -= b_etas[i]*delta_Y[i]
-            Z[i] -= r_etas[i]*delta_Z[i]
-            Z[i][Z[i] < 0] = 0
+                if i > 1:
+                    Y[i-1][k, j] -= epsilon
 
-def softplus(x, limit=30):
-    return torch.nn.functional.softplus(Variable(x)).data
+                forward(W, b, v, h, f_input=x)
+                beta   = output_burst_prob*h[-1]
+                beta_t = output_burst_prob*t
+                cost_minus = 0.5*torch.sum((beta_t - beta)**2)
 
-def softplus_deriv(x):
-    return torch.nn.functional.sigmoid(Variable(x)).data
+                W[i][j, k] += 2*epsilon
 
-def relu(x, baseline=0):
-    return torch.nn.functional.relu(Variable(x)).data
+                if i > 1:
+                    Y[i-1][k, j] += 2*epsilon
 
-def relu_deriv(x, baseline=0):
-    return torch.gt(x, baseline).type(dtype)
+                forward(W, b, v, h, f_input=x)
+                beta   = output_burst_prob*h[-1]
+                beta_t = output_burst_prob*t
+                cost_plus = 0.5*torch.sum((beta_t - beta)**2)
+
+                numerical_delta_W[i][j, k] = (cost_plus - cost_minus)/(2*epsilon)
+
+                W[i][j, k] -= epsilon
+
+                if i > 1:
+                    Y[i-1][k, j] -= epsilon
+
+    print([ torch.mean(torch.abs((delta_W[i] - numerical_delta_W[i]))) for i in range(1, n_layers) ])
+
+
+def create_training_data():
+    # load MNIST data
+    x_set, t_set, x_test_set, t_test_set = utils.load_mnist_data(n_examples, n_test_examples, validation=validation)
+    x_set      = torch.from_numpy(x_set).type(dtype)
+    t_set      = torch.from_numpy(t_set).type(dtype)
+    x_test_set = torch.from_numpy(x_test_set).type(dtype)
+    t_test_set = torch.from_numpy(t_test_set).type(dtype)
+
+def create_dynamic_variables(symmetric_weights=False):
+    # create network variables
+    W      = [0] + [ torch.from_numpy(np.random.normal(0, W_std[i], size=(n_units[i], n_units[i-1]))).type(dtype) for i in range(1, n_layers) ]
+    W[-1] += 0.001
+    b      = [0] + [ torch.from_numpy(np.zeros((n_units[i], 1))).type(dtype) for i in range(1, n_layers) ]
+    if symmetric_weights:
+        Y  = [0] + [ torch.from_numpy(W[i+1].T.copy()).type(dtype) for i in range(1, n_layers-1) ]
+    else:
+        Y  = [0] + [ torch.from_numpy(np.random.normal(0, Y_std[i], size=(n_units[i], n_units[i+1]))).type(dtype) for i in range(1, n_layers-1) ]
+    Z      = [0] + [ torch.from_numpy(np.random.uniform(0, Z_std[i], size=(n_units[i], n_units[i]))).type(dtype) for i in range(1, n_layers-1) ]
+    v      = [0] + [ torch.from_numpy(np.zeros(n_units[i])).type(dtype) for i in range(1, n_layers) ]
+    h      = [0] + [ torch.from_numpy(np.zeros(n_units[i])).type(dtype) for i in range(1, n_layers) ]
+    u      = [0] + [ torch.from_numpy(np.zeros(n_units[i])).type(dtype) for i in range(1, n_layers) ]
+    u_t    = [0] + [ torch.from_numpy(np.zeros(n_units[i])).type(dtype) for i in range(1, n_layers) ]
+    p      = [0] + [ torch.from_numpy(np.zeros(n_units[i])).type(dtype) for i in range(1, n_layers) ]
+    p_t    = [0] + [ torch.from_numpy(np.zeros(n_units[i])).type(dtype) for i in range(1, n_layers) ]
+    beta   = [0] + [ torch.from_numpy(np.zeros(n_units[i])).type(dtype) for i in range(1, n_layers) ]
+    beta_t = [0] + [ torch.from_numpy(np.zeros(n_units[i])).type(dtype) for i in range(1, n_layers) ]
+    mean_c = [0] + [ torch.from_numpy(np.zeros((n_units[i], 1))).type(dtype) for i in range(1, n_layers-1) ]
+
+    return W, b, Y, Z, v, h, u, u_t, p, p_t, beta, beta_t, mean_c
+
+def load_dynamic_variables(path):
+    W      = pickle.load(open(os.path.join(path, "W.pkl"), 'rb'))
+    b      = pickle.load(open(os.path.join(path, "b.pkl"), 'rb'))
+    Y      = pickle.load(open(os.path.join(path, "Y.pkl"), 'rb'))
+    Z      = pickle.load(open(os.path.join(path, "Z.pkl"), 'rb'))
+    v      = pickle.load(open(os.path.join(path, "v.pkl"), 'rb'))
+    h      = pickle.load(open(os.path.join(path, "h.pkl"), 'rb'))
+    u      = pickle.load(open(os.path.join(path, "u.pkl"), 'rb'))
+    u_t    = pickle.load(open(os.path.join(path, "u_t.pkl"), 'rb'))
+    p      = pickle.load(open(os.path.join(path, "p.pkl"), 'rb'))
+    p_t    = pickle.load(open(os.path.join(path, "p_t.pkl"), 'rb'))
+    beta   = pickle.load(open(os.path.join(path, "beta.pkl"), 'rb'))
+    beta_t = pickle.load(open(os.path.join(path, "beta_t.pkl"), 'rb'))
+    mean_c = pickle.load(open(os.path.join(path, "mean_c.pkl"), 'rb'))
+
+    return W, b, Y, Z, v, h, u, u_t, p, p_t, beta, beta_t, mean_c
+
+def save_dynamic_variables(path, W, b, Y, Z, v, h, u, u_t, p, p_t, beta, beta_t, mean_c):
+    pickle.dump(W, open(os.path.join(path, "W.pkl"), 'wb'))
+    pickle.dump(b, open(os.path.join(path, "b.pkl"), 'wb'))
+    pickle.dump(Y, open(os.path.join(path, "Y.pkl"), 'wb'))
+    pickle.dump(Z, open(os.path.join(path, "Z.pkl"), 'wb'))
+    pickle.dump(v, open(os.path.join(path, "v.pkl"), 'wb'))
+    pickle.dump(h, open(os.path.join(path, "h.pkl"), 'wb'))
+    pickle.dump(u, open(os.path.join(path, "u.pkl"), 'wb'))
+    pickle.dump(u_t, open(os.path.join(path, "u_t.pkl"), 'wb'))
+    pickle.dump(p, open(os.path.join(path, "p.pkl"), 'wb'))
+    pickle.dump(p_t, open(os.path.join(path, "p_t.pkl"), 'wb'))
+    pickle.dump(beta, open(os.path.join(path, "beta.pkl"), 'wb'))
+    pickle.dump(beta_t, open(os.path.join(path, "beta_t.pkl"), 'wb'))
+    pickle.dump(mean_c, open(os.path.join(path, "mean_c.pkl"), 'wb'))
+
+def save_results(path, costs, backprop_angles, errors):
+    pickle.dump(costs, open(os.path.join(path, "costs.pkl"), 'wb'))
+    pickle.dump(backprop_angles, open(os.path.join(path, "backprop_angles.pkl"), 'wb'))
+    pickle.dump(errors, open(os.path.join(path, "errors.pkl"), 'wb'))
