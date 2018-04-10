@@ -50,9 +50,9 @@ elif n_layers == 3: # One hidden layer
     n_units           = [784, 500, 10]
     W_std             = [0, 0.05, 0.01]
     Z_std             = [0, 0.01]
-    Y_std             = [0, 0.1]
-    f_etas            = [0, 0.01, 0.01]
-    r_etas            = [0, 0.0]
+    Y_std             = [0, 0.005]
+    f_etas            = [0, 0.5, 0.01]
+    r_etas            = [0, 0.01]
     b_etas            = [0, 0.0]
     output_burst_prob = 0.2
     min_Z             = 0.1
@@ -104,6 +104,7 @@ def create_training_data():
 def create_dynamic_variables(symmetric_weights=False):
     # create network variables
     W      = [0] + [ torch.from_numpy(np.random.normal(0, W_std[i], size=(n_units[i], n_units[i-1]))).type(dtype) for i in range(1, n_layers) ]
+    W[-1] += 0.001
     b      = [0] + [ torch.from_numpy(np.zeros((n_units[i], 1))).type(dtype) for i in range(1, n_layers) ]
     if symmetric_weights:
         Y  = [0] + [ torch.from_numpy(W[i+1].T.copy()).type(dtype) for i in range(1, n_layers-1) ]
@@ -215,7 +216,7 @@ def test(W, b):
 
     # initialize error
     error = 0
-
+    cost = 0
     for i in range(n_test_examples):
         # get input and target for this test example
         x = x_test_set[:, i]
@@ -223,6 +224,11 @@ def test(W, b):
 
         # do a forward pass
         forward(W, b, v, h, f_input=x)
+
+        # compute cost
+        beta   = output_burst_prob*h[-1]
+        beta_t = output_burst_prob*t.unsqueeze(1)
+        cost += 0.5*torch.sum((beta_t - beta)**2)
 
         # get the predicted & target class
         predicted_class = int(torch.max(h[-1], 0)[1])
@@ -232,7 +238,9 @@ def test(W, b):
         if predicted_class != target_class:
             error += 1
 
-    return 100.0*error/n_test_examples
+    cost /= n_test_examples
+
+    return 100.0*error/n_test_examples, cost
 
 def forward(W, b, v, h, f_input):
     h[0] = f_input.unsqueeze(1)
@@ -276,11 +284,11 @@ def backward(Y, Z, W, b, u, u_t, p, p_t, beta, beta_t, v, h, mean_c, t_input):
             mean_c[i] = 0.5*mean_c[i] + 0.5*c
 
             if i == n_layers-2:
-                u[i]   = Y[i].mm(beta[i+1]*output_burst_prob*relu_deriv(beta[i+1]))/c
-                u_t[i] = Y[i].mm(beta_t[i+1]*output_burst_prob*relu_deriv(beta_t[i+1]))/c
+                u[i]   = W[i+1].transpose(0, 1).mm(beta[i+1]*output_burst_prob*relu_deriv(beta[i+1]))/c
+                u_t[i] = W[i+1].transpose(0, 1).mm(beta_t[i+1]*output_burst_prob*relu_deriv(beta_t[i+1]))/c
             else:
-                u[i]   = Y[i].mm(beta[i+1])/c
-                u_t[i] = Y[i].mm(beta_t[i+1])/c
+                u[i]   = W[i+1].transpose(0, 1).mm(beta[i+1])/c
+                u_t[i] = W[i+1].transpose(0, 1).mm(beta_t[i+1])/c
 
             max_u[i] = torch.sum(torch.abs(Y[i]), dim=1).unsqueeze(1)/mean_c[i]
 
@@ -294,7 +302,7 @@ def backward(Y, Z, W, b, u, u_t, p, p_t, beta, beta_t, v, h, mean_c, t_input):
             cost_Z[i] = 0.5*torch.sum((u[i])**2) + 0.5*torch.sum((min_Z - Z[i])**2)
             cost_Y[i] = 0.5*torch.sum((u_range - max_u[i])**2)
 
-            e          = -(beta_t[i] - beta[i])
+            e          = -(beta_t[i] - beta[i])*softplus_deriv(v[i])
             delta_W[i] = e.mm(h[i-1].transpose(0, 1))
             delta_b[i] = e
 
@@ -338,6 +346,7 @@ def train(path=None, continuing_path=None):
         W, b, Y, Z, v, h, u, u_t, p, p_t, beta, beta_t, mean_c = create_dynamic_variables(symmetric_weights=False)
 
     costs           = np.zeros((n_layers, n_epochs*n_examples))
+    test_costs      = np.zeros(n_epochs*n_examples)
     backprop_angles = np.zeros((n_layers-2, n_epochs*n_examples))
     min_us          = np.zeros((n_layers-2, n_epochs*n_examples))
     max_us          = np.zeros((n_layers-2, n_epochs*n_examples))
@@ -370,7 +379,7 @@ def train(path=None, continuing_path=None):
     example_indices = np.arange(n_examples)
 
     # calculate the initial test error as a percentage
-    errors[0] = test(W, b)
+    errors[0], test_costs[0] = test(W, b)
     print("Initial test error: {}%.".format(errors[0]))
 
     if use_comet:
@@ -435,10 +444,10 @@ def train(path=None, continuing_path=None):
             update_weights(W, b, Y, Z, delta_W, delta_b, delta_Y, delta_Z)
 
             if (example_num+1) % 1000 == 0:
-                error = test(W, b)
+                error, test_cost = test(W, b)
 
                 # print test error
-                print("Epoch {}, ex {}. TE: {}%.".format(epoch_num+1, example_num+1, error))
+                print("Epoch {}, ex {}. TE: {}%. TC: {}.".format(epoch_num+1, example_num+1, error, test_cost))
 
                 abs_ex_num = epoch_num*n_examples + example_num+1
 
@@ -450,7 +459,7 @@ def train(path=None, continuing_path=None):
                     with experiment.validate():
                         experiment.log_metric("accuracy", 100 - error, step=example_num)
 
-        errors[epoch_num+1] = test(W, b)
+        errors[epoch_num+1], test_costs[epoch_num+1] = test(W, b)
         print("Epoch {} test error: {}.".format(epoch_num+1, errors[epoch_num+1]))
 
         if path is not None:
