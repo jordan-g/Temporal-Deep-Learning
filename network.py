@@ -9,13 +9,15 @@ import utils
 from plotter import Plotter, SigmoidLimitsPlotter
 import os
 import datetime
-import pickle
 import torch
 from torch.autograd import Variable
 from comet_ml import Experiment
 import time
+import misc
+import json
 
-use_comet = False # whether to use Comet.ml
+use_comet             = False # whether to use Comet.ml
+comet_experiment_name = "Multiplexing"
 
 cuda = torch.cuda.is_available()
 if cuda:
@@ -165,7 +167,7 @@ def backward(Y, Z, W, b, u, u_t, p, p_t, beta, beta_t, v, h, mean_c, t_input):
             cost_Z[i] = 0.5*torch.sum((u[i])**2) + 0.5*torch.sum((min_Z - Z[i])**2)
             cost_Y[i] = 0.5*torch.sum((u_range - max_u[i])**2)
 
-            e          = -(beta_t[i] - beta[i])*softplus_deriv(v[i])
+            e          = -(p_t[i] - p[i])*softplus_deriv(v[i])
             delta_W[i] = e.mm(h[i-1].transpose(0, 1))
             delta_b[i] = e
 
@@ -198,11 +200,15 @@ def train(path=None, continuing_path=None):
         if not os.path.exists(path):
             os.makedirs(path)
 
-        with open(os.path.join(path, "params.txt"), "a+") as f:
-            f.write("Simulation run @ {}\n".format(datetime.datetime.now().strftime("%I:%M%p on %B %d, %Y")))
-            if continuing_path != "":
+        timestamp = datetime.datetime.now().strftime("%I:%M%p on %B %d, %Y")
+        with open(os.path.join(path, "params.txt"), "w") as f:
+            f.write("Simulation run @ {}\n".format(timestamp))
+            if continuing_path is not None:
                 f.write("Continuing from \"{}\"\n".format(continuing_path))
             f.write("Number of epochs: {}\n".format(n_epochs))
+            f.write("Number of training examples: {}\n".format(n_examples))
+            f.write("Number of testing examples: {}\n".format(n_test_examples))
+            f.write("Using validation set: {}\n".format(validation))
             f.write("Feedforward learning rates: {}\n".format(f_etas))
             f.write("Feedback learning rates: {}\n".format(b_etas))
             f.write("Recurrent learning rates: {}\n".format(r_etas))
@@ -214,19 +220,41 @@ def train(path=None, continuing_path=None):
             f.write("Minimum Z value: {}\n".format(min_Z))
             f.write("Max apical potential: {}\n".format(u_range))
 
-    if continuing_path is not None:
-        W, b, Y, Z, v, h, u, u_t, p, p_t, beta, beta_t, mean_c = load_dynamic_variables(continuing_path)
-    else:
-        W, b, Y, Z, v, h, u, u_t, p, p_t, beta, beta_t, mean_c = create_dynamic_variables(symmetric_weights=False)
+        params_dict = {'timestamp'        : timestamp,
+                       'continuing_path'  : continuing_path,
+                       'n_epochs'         : n_epochs,
+                       'n_examples'       : n_examples,
+                       'n_test_examples'  : n_test_examples,
+                       'validation'       : validation,
+                       'n_units'          : n_units,
+                       'W_std'            : W_std,
+                       'Z_std'            : Z_std,
+                       'Y_std'            : Y_std,
+                       'f_etas'           : f_etas,
+                       'r_etas'           : r_etas,
+                       'b_etas'           : b_etas,
+                       'output_burst_prob': output_burst_prob,
+                       'min_Z'            : min_Z,
+                       'u_range'          : u_range,
+                       'W_decay'          : W_decay}
 
-    costs           = np.zeros((n_layers, n_epochs*n_examples))
-    test_costs      = np.zeros(n_epochs*n_examples)
-    backprop_angles = np.zeros((n_layers-2, n_epochs*n_examples))
-    min_us          = np.zeros((n_layers-2, n_epochs*n_examples))
-    max_us          = np.zeros((n_layers-2, n_epochs*n_examples))
-    min_hs          = np.zeros((n_layers-1, n_epochs*n_examples))
-    max_hs          = np.zeros((n_layers-1, n_epochs*n_examples))
-    errors          = np.zeros((n_epochs+1))
+        with open(os.path.join(path, "params.json"), 'w') as f:
+            json.dump(params_dict, f)
+
+    W, b, Y, Z, v, h, u, u_t, p, p_t, beta, beta_t, mean_c = create_dynamic_variables(symmetric_weights=False)
+    if continuing_path is not None:
+        W, b, Y, Z, mean_c = load_dynamic_variables(continuing_path)
+
+    costs               = np.zeros((n_layers, n_epochs*n_examples))
+    avg_costs           = np.zeros((n_layers, n_epochs*int(n_examples//1000)))
+    test_costs          = np.zeros(n_epochs*int(n_examples//1000)+1)
+    backprop_angles     = np.zeros((n_layers-2, n_epochs*n_examples))
+    avg_backprop_angles = np.zeros((n_layers-2, n_epochs*int(n_examples//1000)))
+    min_us              = np.zeros((n_layers-2, n_epochs*n_examples))
+    max_us              = np.zeros((n_layers-2, n_epochs*n_examples))
+    min_hs              = np.zeros((n_layers-1, n_epochs*n_examples))
+    max_hs              = np.zeros((n_layers-1, n_epochs*n_examples))
+    errors              = np.zeros(n_epochs*int(n_examples//1000)+1)
 
     if use_comet:
         hyper_params = {
@@ -246,7 +274,7 @@ def train(path=None, continuing_path=None):
                 hyper_params["b_etas_{}".format(i)]  = b_etas[i]
                 hyper_params["r_etas_{}".format(i)]  = r_etas[i]
             
-        experiment = Experiment(api_key="Pn4QeNGStxQlMpDfQlOt16XI5", project_name="Multiplexing")
+        experiment = Experiment(api_key=misc.comet_api_key, project_name=comet_experiment_name)
         experiment.log_multiple_params(hyper_params)
 
     # make a list of training example indices
@@ -259,10 +287,11 @@ def train(path=None, continuing_path=None):
     if use_comet:
         with experiment.validate():
             experiment.log_metric("accuracy", 100 - errors[0], step=0)
+            experiment.log_metric("cost", test_costs[0], step=0)
 
     if path is not None:
-        save_dynamic_variables(path, W, b, Y, Z, v, h, u, u_t, p, p_t, beta, beta_t, mean_c)
-        save_results(path, costs, backprop_angles, errors)
+        save_dynamic_variables(path, W, b, Y, Z, mean_c)
+        save_results(path, costs, backprop_angles, errors, test_costs)
 
     for epoch_num in range(n_epochs):
         start_time = time.time()
@@ -277,6 +306,8 @@ def train(path=None, continuing_path=None):
 
         for example_num in range(n_examples):
             example_index = example_indices[example_num]
+
+            abs_ex_num = epoch_num*n_examples + example_num
 
             # get input and target for this example
             x = x_set[:, example_index]
@@ -304,41 +335,42 @@ def train(path=None, continuing_path=None):
 
             if use_comet:
                 with experiment.train():
-                    experiment.log_metric("loss", float(cost[-1]), step=example_num)
-                    experiment.log_metric("accuracy", 100.0*(1 - train_error/(example_num+1)), step=example_num)
+                    experiment.log_metric("loss", float(cost[-1]), step=example_num+1)
+                    experiment.log_metric("accuracy", 100.0*(1 - train_error/(example_num+1)), step=example_num+1)
 
                     for i in range(1, n_layers):
                         if i < n_layers-1:
-                            experiment.log_metric("bp_angle_{}".format(i), backprop_angle[i-1], step=example_num)
-                            experiment.log_metric("min_u_{}", min_us[i-1, epoch_num*n_examples + example_num], step=example_num)
-                            experiment.log_metric("max_u_{}", max_us[i-1, epoch_num*n_examples + example_num], step=example_num)
-                        experiment.log_metric("min_h_{}", min_hs[i-1, epoch_num*n_examples + example_num], step=example_num)
-                        experiment.log_metric("max_h_{}", max_hs[i-1, epoch_num*n_examples + example_num], step=example_num)
+                            experiment.log_metric("bp_angle_{}".format(i), backprop_angle[i-1], step=abs_ex_num+1)
+                            experiment.log_metric("min_u_{}", min_us[i-1, abs_ex_num], step=abs_ex_num+1)
+                            experiment.log_metric("max_u_{}", max_us[i-1, abs_ex_num], step=abs_ex_num+1)
+                        experiment.log_metric("min_h_{}", min_hs[i-1, abs_ex_num], step=abs_ex_num+1)
+                        experiment.log_metric("max_h_{}", max_hs[i-1, abs_ex_num], step=abs_ex_num+1)
 
             update_weights(W, b, Y, Z, delta_W, delta_b, delta_Y, delta_Z)
 
             if (example_num+1) % 1000 == 0:
-                error, test_cost = test(W, b)
+                index = epoch_num*int(n_examples//1000) + int((example_num+1)//1000) + 1
+
+                errors[index], test_costs[index] = test(W, b)
+
+                avg_backprop_angles[:, index-1] = np.mean(backprop_angles[:, abs_ex_num-999:abs_ex_num+1], axis=1)
+                avg_costs[:, index-1]           = np.mean(costs[:, abs_ex_num-999:abs_ex_num+1], axis=1)
 
                 # print test error
-                print("Epoch {}, ex {}. TE: {}%. TC: {}.".format(epoch_num+1, example_num+1, error, test_cost))
-
-                abs_ex_num = epoch_num*n_examples + example_num+1
+                print("Epoch {}, ex {}. Test Error: {}%. Test Cost: {}. Train Cost: {}.".format(epoch_num+1, example_num+1, errors[index], test_costs[index], avg_costs[-1, index-1]))
 
                 for i in range(1, n_layers-1):
-                    print("Layer {}. BPA: {:.1f}. u: {:.4f} to {:.4f}. h: {:.4f} to {:.4f}".format(i, np.mean(backprop_angles[i-1, abs_ex_num-1000:abs_ex_num]), np.mean(min_us[i-1, abs_ex_num-1000:abs_ex_num]), np.mean(max_us[i-1, abs_ex_num-1000:abs_ex_num]), np.mean(min_hs[i-1, abs_ex_num-1000:abs_ex_num]), np.mean(max_hs[i-1, abs_ex_num-1000:abs_ex_num])))
-                print("Layer {}. h: {:.4f} to {:.4f}".format(n_layers-1, np.mean(min_hs[-1, abs_ex_num-1000:abs_ex_num]), np.mean(max_hs[-1, abs_ex_num-1000:abs_ex_num])))
+                    print("Layer {}. BPA: {:.1f}. u: {:.4f} to {:.4f}. h: {:.4f} to {:.4f}".format(i, avg_backprop_angles[i-1, index-1], np.mean(min_us[i-1, abs_ex_num-999:abs_ex_num+1]), np.mean(max_us[i-1, abs_ex_num-999:abs_ex_num+1]), np.mean(min_hs[i-1, abs_ex_num-999:abs_ex_num+1]), np.mean(max_hs[i-1, abs_ex_num-999:abs_ex_num+1])))
+                print("Layer {}. h: {:.4f} to {:.4f}".format(n_layers-1, np.mean(min_hs[-1, abs_ex_num-999:abs_ex_num+1]), np.mean(max_hs[-1, abs_ex_num-999:abs_ex_num+1])))
 
                 if use_comet:
                     with experiment.validate():
-                        experiment.log_metric("accuracy", 100 - error, step=example_num)
+                        experiment.log_metric("accuracy", 100 - error, step=abs_ex_num)
+                        experiment.log_metric("cost", test_cost, step=abs_ex_num)
 
-        errors[epoch_num+1], test_costs[epoch_num+1] = test(W, b)
-        print("Epoch {} test error: {}.".format(epoch_num+1, errors[epoch_num+1]))
-
-        if path is not None:
-            save_dynamic_variables(path, W, b, Y, Z, v, h, u, u_t, p, p_t, beta, beta_t, mean_c)
-            save_results(path, costs, backprop_angles, errors)
+                if path is not None:
+                    save_dynamic_variables(path, W, b, Y, Z, mean_c)
+                    save_results(path, avg_costs, avg_backprop_angles, errors, test_costs)
 
         end_time = time.time()
 
@@ -352,7 +384,7 @@ def test(W, b):
 
     # initialize error
     error = 0
-    cost = 0
+    cost  = 0
     for i in range(n_test_examples):
         # get input and target for this test example
         x = x_test_set[:, i]
@@ -364,7 +396,7 @@ def test(W, b):
         # compute cost
         beta   = output_burst_prob*h[-1]
         beta_t = output_burst_prob*t.unsqueeze(1)
-        cost += 0.5*torch.sum((beta_t - beta)**2)
+        cost  += 0.5*torch.sum((beta_t - beta)**2)
 
         # get the predicted & target class
         predicted_class = int(torch.max(h[-1], 0)[1])
@@ -471,38 +503,28 @@ def create_dynamic_variables(symmetric_weights=False):
     return W, b, Y, Z, v, h, u, u_t, p, p_t, beta, beta_t, mean_c
 
 def load_dynamic_variables(path):
-    W      = pickle.load(open(os.path.join(path, "W.pkl"), 'rb'))
-    b      = pickle.load(open(os.path.join(path, "b.pkl"), 'rb'))
-    Y      = pickle.load(open(os.path.join(path, "Y.pkl"), 'rb'))
-    Z      = pickle.load(open(os.path.join(path, "Z.pkl"), 'rb'))
-    v      = pickle.load(open(os.path.join(path, "v.pkl"), 'rb'))
-    h      = pickle.load(open(os.path.join(path, "h.pkl"), 'rb'))
-    u      = pickle.load(open(os.path.join(path, "u.pkl"), 'rb'))
-    u_t    = pickle.load(open(os.path.join(path, "u_t.pkl"), 'rb'))
-    p      = pickle.load(open(os.path.join(path, "p.pkl"), 'rb'))
-    p_t    = pickle.load(open(os.path.join(path, "p_t.pkl"), 'rb'))
-    beta   = pickle.load(open(os.path.join(path, "beta.pkl"), 'rb'))
-    beta_t = pickle.load(open(os.path.join(path, "beta_t.pkl"), 'rb'))
-    mean_c = pickle.load(open(os.path.join(path, "mean_c.pkl"), 'rb'))
+    state = torch.load(os.path.join(path, "state.dat"))
 
-    return W, b, Y, Z, v, h, u, u_t, p, p_t, beta, beta_t, mean_c
+    W      = state['W']
+    b      = state['b']
+    Y      = state['Y']
+    Z      = state['Z']
+    mean_c = state['mean_c']
 
-def save_dynamic_variables(path, W, b, Y, Z, v, h, u, u_t, p, p_t, beta, beta_t, mean_c):
-    pickle.dump(W, open(os.path.join(path, "W.pkl"), 'wb'))
-    pickle.dump(b, open(os.path.join(path, "b.pkl"), 'wb'))
-    pickle.dump(Y, open(os.path.join(path, "Y.pkl"), 'wb'))
-    pickle.dump(Z, open(os.path.join(path, "Z.pkl"), 'wb'))
-    pickle.dump(v, open(os.path.join(path, "v.pkl"), 'wb'))
-    pickle.dump(h, open(os.path.join(path, "h.pkl"), 'wb'))
-    pickle.dump(u, open(os.path.join(path, "u.pkl"), 'wb'))
-    pickle.dump(u_t, open(os.path.join(path, "u_t.pkl"), 'wb'))
-    pickle.dump(p, open(os.path.join(path, "p.pkl"), 'wb'))
-    pickle.dump(p_t, open(os.path.join(path, "p_t.pkl"), 'wb'))
-    pickle.dump(beta, open(os.path.join(path, "beta.pkl"), 'wb'))
-    pickle.dump(beta_t, open(os.path.join(path, "beta_t.pkl"), 'wb'))
-    pickle.dump(mean_c, open(os.path.join(path, "mean_c.pkl"), 'wb'))
+    return W, b, Y, Z, mean_c
 
-def save_results(path, costs, backprop_angles, errors):
-    pickle.dump(costs, open(os.path.join(path, "costs.pkl"), 'wb'))
-    pickle.dump(backprop_angles, open(os.path.join(path, "backprop_angles.pkl"), 'wb'))
-    pickle.dump(errors, open(os.path.join(path, "errors.pkl"), 'wb'))
+def save_dynamic_variables(path, W, b, Y, Z, mean_c):
+    state = {
+        'W': W,
+        'b': b,
+        'Y': Y,
+        'Z': Z,
+        'mean_c': mean_c
+    }
+    torch.save(state, os.path.join(path, "state.dat"))
+
+def save_results(path, avg_costs, avg_backprop_angles, errors, test_costs):
+    np.savetxt(os.path.join(path, "avg_costs.csv"), avg_costs, delimiter=",", fmt='%.5f')
+    np.savetxt(os.path.join(path, "test_costs.csv"), test_costs, delimiter=",", fmt='%.5f')
+    np.savetxt(os.path.join(path, "avg_backprop_angles.csv"), avg_backprop_angles, delimiter=",", fmt='%.5f')
+    np.savetxt(os.path.join(path, "errors.csv"), errors, delimiter=",", fmt='%.2f')
