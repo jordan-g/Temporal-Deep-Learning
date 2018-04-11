@@ -3,9 +3,9 @@ import network as net
 import sys
 
 if len(sys.argv) > 1:
-    path = str(sys.argv[1])
+    folder_prefix = str(sys.argv[1])
 else:
-    path = None
+    folder_prefix = None
 
 if len(sys.argv) > 2:
     net.n_units   = [ int(i) for i in sys.argv[2].split(" ") ]
@@ -17,4 +17,4 @@ if len(sys.argv) > 2:
     net.r_etas    = [ float(i) for i in sys.argv[8].split(" ") ]
     net.n_epochs  = int(sys.argv[9])
 
-net.train(path=path)
+net.train(folder_prefix=folder_prefix)

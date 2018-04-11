@@ -191,28 +191,41 @@ def update_weights(W, b, Y, Z, delta_W, delta_b, delta_Y, delta_Z):
             Z[i] -= r_etas[i]*delta_Z[i]
             Z[i][Z[i] < 0] = 0
 
-def train(path=None, continuing_path=None):
-    if path is not None and path == continuing_path:
+def train(folder_prefix=None, continuing_folder=None):
+    if folder_prefix is not None:
+        n_units_string = " ".join([ str(i) for i in n_units[1:] ])
+        f_etas_string  = " ".join([ str(i) for i in f_etas[1:] ])
+        b_etas_string  = " ".join([ str(i) for i in b_etas[1:] ])
+        r_etas_string  = " ".join([ str(i) for i in r_etas[1:] ])
+        W_std_string   = " ".join([ str(i) for i in W_std[1:] ])
+        Z_std_string   = " ".join([ str(i) for i in Z_std[1:] ])
+        Y_std_string   = " ".join([ str(i) for i in Y_std[1:] ])
+
+        folder = "{} - {} - {} - {} - {} - {} - {} - {} - {} - {} - {}".format(folder_prefix, n_units_string, f_etas_string, b_etas_string, r_etas_string, W_std_string, Z_std_string, Y_std_string, output_burst_prob, min_Z, u_range)
+    else:
+        folder = None
+
+    if folder is not None and folder == continuing_folder:
         print("Error: If you're continuing a simulation, the new results need to be saved in a different directory.")
         raise
 
-    if path is not None:
-        if not os.path.exists(path):
-            os.makedirs(path)
+    if folder is not None:
+        if not os.path.exists(folder):
+            os.makedirs(folder)
 
         timestamp = datetime.datetime.now().strftime("%I:%M%p on %B %d, %Y")
-        with open(os.path.join(path, "params.txt"), "w") as f:
+        with open(os.path.join(folder, "params.txt"), "w") as f:
             f.write("Simulation run @ {}\n".format(timestamp))
-            if continuing_path is not None:
-                f.write("Continuing from \"{}\"\n".format(continuing_path))
+            if continuing_folder is not None:
+                f.write("Continuing from \"{}\"\n".format(continuing_folder))
             f.write("Number of epochs: {}\n".format(n_epochs))
             f.write("Number of training examples: {}\n".format(n_examples))
             f.write("Number of testing examples: {}\n".format(n_test_examples))
             f.write("Using validation set: {}\n".format(validation))
+            f.write("Number of units in each layer: {}\n".format(n_units))
             f.write("Feedforward learning rates: {}\n".format(f_etas))
             f.write("Feedback learning rates: {}\n".format(b_etas))
             f.write("Recurrent learning rates: {}\n".format(r_etas))
-            f.write("Number of units in each layer: {}\n".format(n_units))
             f.write("W standard deviation: {}\n".format(W_std))
             f.write("Y standard deviation: {}\n".format(Y_std))
             f.write("Z standard deviation: {}\n".format(Z_std))
@@ -221,7 +234,7 @@ def train(path=None, continuing_path=None):
             f.write("Max apical potential: {}\n".format(u_range))
 
         params_dict = {'timestamp'        : timestamp,
-                       'continuing_path'  : continuing_path,
+                       'continuing_folder': continuing_folder,
                        'n_epochs'         : n_epochs,
                        'n_examples'       : n_examples,
                        'n_test_examples'  : n_test_examples,
@@ -238,12 +251,12 @@ def train(path=None, continuing_path=None):
                        'u_range'          : u_range,
                        'W_decay'          : W_decay}
 
-        with open(os.path.join(path, "params.json"), 'w') as f:
+        with open(os.path.join(folder, "params.json"), 'w') as f:
             json.dump(params_dict, f)
 
     W, b, Y, Z, v, h, u, u_t, p, p_t, beta, beta_t, mean_c = create_dynamic_variables(symmetric_weights=False)
-    if continuing_path is not None:
-        W, b, Y, Z, mean_c = load_dynamic_variables(continuing_path)
+    if continuing_folder is not None:
+        W, b, Y, Z, mean_c = load_dynamic_variables(continuing_folder)
 
     costs               = np.zeros((n_layers, n_epochs*n_examples))
     avg_costs           = np.zeros((n_layers, n_epochs*int(n_examples//1000)))
@@ -289,9 +302,9 @@ def train(path=None, continuing_path=None):
             experiment.log_metric("accuracy", 100 - errors[0], step=0)
             experiment.log_metric("cost", test_costs[0], step=0)
 
-    if path is not None:
-        save_dynamic_variables(path, W, b, Y, Z, mean_c)
-        save_results(path, costs, backprop_angles, errors, test_costs)
+    if folder is not None:
+        save_dynamic_variables(folder, W, b, Y, Z, mean_c)
+        save_results(folder, costs, backprop_angles, errors, test_costs)
 
     for epoch_num in range(n_epochs):
         start_time = time.time()
@@ -368,9 +381,9 @@ def train(path=None, continuing_path=None):
                         experiment.log_metric("accuracy", 100 - error, step=abs_ex_num)
                         experiment.log_metric("cost", test_cost, step=abs_ex_num)
 
-                if path is not None:
-                    save_dynamic_variables(path, W, b, Y, Z, mean_c)
-                    save_results(path, avg_costs, avg_backprop_angles, errors, test_costs)
+                if folder is not None:
+                    save_dynamic_variables(folder, W, b, Y, Z, mean_c)
+                    save_results(folder, avg_costs, avg_backprop_angles, errors, test_costs)
 
         end_time = time.time()
 
