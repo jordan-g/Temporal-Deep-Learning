@@ -362,7 +362,7 @@ def train(folder_prefix=None, continuing_folder=None):
             update_weights(W, b, Y, Z, delta_W, delta_b, delta_Y, delta_Z)
 
             if (example_num+1) % 1000 == 0:
-                index = epoch_num*int(n_examples//1000) + int((example_num+1)//1000) + 1
+                index = epoch_num*int(n_examples//1000) + int((example_num+1)//1000)
 
                 errors[index], test_costs[index] = test(W, b)
 
@@ -378,8 +378,8 @@ def train(folder_prefix=None, continuing_folder=None):
 
                 if use_comet:
                     with experiment.validate():
-                        experiment.log_metric("accuracy", 100 - error, step=abs_ex_num)
-                        experiment.log_metric("cost", test_cost, step=abs_ex_num)
+                        experiment.log_metric("accuracy", 100 - errors[index], step=abs_ex_num)
+                        experiment.log_metric("cost", test_costs[index], step=abs_ex_num)
 
                 if folder is not None:
                     save_dynamic_variables(folder, W, b, Y, Z, mean_c)
