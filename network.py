@@ -55,7 +55,7 @@ elif n_layers == 3: # One hidden layer
     Z_std             = [0, 0.01]
     Y_std             = [0, 0.005]
     f_etas            = [0, 0.5, 0.01]
-    r_etas            = [0, 0.001]
+    r_etas            = [0, 0.0]
     b_etas            = [0, 0.0]
     output_burst_prob = 0.2
     min_Z             = 0.1
@@ -264,8 +264,12 @@ def train(folder_prefix=None, continuing_folder=None):
     if continuing_folder is not None:
         W, b, Y, Z, mean_c = load_dynamic_variables(continuing_folder)
 
-    costs               = np.zeros((n_layers, n_epochs*n_examples))
-    avg_costs           = np.zeros((n_layers, n_epochs*int(n_examples//1000)))
+    costs               = np.zeros((n_layers-1, n_epochs*n_examples))
+    Y_costs             = np.zeros((n_layers-2, n_epochs*n_examples))
+    Z_costs             = np.zeros((n_layers-2, n_epochs*n_examples))
+    avg_costs           = np.zeros((n_layers-1, n_epochs*int(n_examples//1000)))
+    avg_Y_costs         = np.zeros((n_layers-2, n_epochs*int(n_examples//1000)))
+    avg_Z_costs         = np.zeros((n_layers-2, n_epochs*int(n_examples//1000)))
     test_costs          = np.zeros(n_epochs*int(n_examples//1000)+1)
     backprop_angles     = np.zeros((n_layers-2, n_epochs*n_examples))
     avg_backprop_angles = np.zeros((n_layers-2, n_epochs*int(n_examples//1000)))
@@ -310,7 +314,7 @@ def train(folder_prefix=None, continuing_folder=None):
 
     if folder is not None:
         save_dynamic_variables(folder, W, b, Y, Z, mean_c)
-        save_results(folder, costs, backprop_angles, errors, test_costs)
+        save_results(folder, avg_costs, backprop_angles, errors, test_costs, avg_Y_costs, avg_Z_costs)
 
     for epoch_num in range(n_epochs):
         start_time = time.time()
@@ -343,7 +347,9 @@ def train(folder_prefix=None, continuing_folder=None):
                 train_error += 1
 
             cost, cost_Y, cost_Z, delta_W, delta_b, delta_Y, delta_Z, max_u, delta_b_backprop = backward(Y, Z, W, b, u, u_t, p, p_t, beta, beta_t, v, h, mean_c, t_input=t)
-            costs[:, epoch_num*n_examples + example_num] = cost
+            costs[:, epoch_num*n_examples + example_num] = cost[1:]
+            Y_costs[:, epoch_num*n_examples + example_num] = cost_Y[1:]
+            Z_costs[:, epoch_num*n_examples + example_num] = cost_Z[1:]
 
             backprop_angle = np.array([ (180/np.pi)*np.arccos(delta_b_backprop[i].squeeze().dot(delta_b[i].squeeze())/(1e-10 + torch.norm(delta_b_backprop[i])*torch.norm(delta_b[i]))) for i in range(1, n_layers-1) ])
             backprop_angles[:, epoch_num*n_examples + example_num] = backprop_angle
@@ -359,6 +365,8 @@ def train(folder_prefix=None, continuing_folder=None):
 
                     for i in range(1, n_layers):
                         if i < n_layers-1:
+                            experiment.log_metric("Y_loss_{}", float(cost_Y[i]), step=example_num+1)
+                            experiment.log_metric("Z_loss_{}", float(cost_Z[i]), step=example_num+1)
                             experiment.log_metric("bp_angle_{}".format(i), backprop_angle[i-1], step=abs_ex_num+1)
                             experiment.log_metric("min_u_{}", min_us[i-1, abs_ex_num], step=abs_ex_num+1)
                             experiment.log_metric("max_u_{}", max_us[i-1, abs_ex_num], step=abs_ex_num+1)
@@ -374,6 +382,8 @@ def train(folder_prefix=None, continuing_folder=None):
 
                 avg_backprop_angles[:, index-1] = np.mean(backprop_angles[:, abs_ex_num-999:abs_ex_num+1], axis=1)
                 avg_costs[:, index-1]           = np.mean(costs[:, abs_ex_num-999:abs_ex_num+1], axis=1)
+                avg_Y_costs[:, index-1]         = np.mean(Y_costs[:, abs_ex_num-999:abs_ex_num+1], axis=1)
+                avg_Z_costs[:, index-1]         = np.mean(Z_costs[:, abs_ex_num-999:abs_ex_num+1], axis=1)
 
                 # print test error
                 print("Epoch {}, ex {}. Test Error: {}%. Test Cost: {}. Train Cost: {}.".format(epoch_num+1, example_num+1, errors[index], test_costs[index], avg_costs[-1, index-1]))
@@ -389,7 +399,7 @@ def train(folder_prefix=None, continuing_folder=None):
 
                 if folder is not None:
                     save_dynamic_variables(folder, W, b, Y, Z, mean_c)
-                    save_results(folder, avg_costs, avg_backprop_angles, errors, test_costs)
+                    save_results(folder, avg_costs, avg_backprop_angles, errors, test_costs, avg_Y_costs, avg_Z_costs)
 
         end_time = time.time()
 
@@ -542,8 +552,10 @@ def save_dynamic_variables(path, W, b, Y, Z, mean_c):
     }
     torch.save(state, os.path.join(path, "state.dat"))
 
-def save_results(path, avg_costs, avg_backprop_angles, errors, test_costs):
+def save_results(path, avg_costs, avg_backprop_angles, errors, test_costs, avg_Y_costs, avg_Z_costs):
     np.savetxt(os.path.join(path, "avg_costs.csv"), avg_costs, delimiter=",", fmt='%.5f')
+    np.savetxt(os.path.join(path, "avg_Y_costs.csv"), avg_Y_costs, delimiter=",", fmt='%.5f')
+    np.savetxt(os.path.join(path, "avg_Z_costs.csv"), avg_Z_costs, delimiter=",", fmt='%.5f')
     np.savetxt(os.path.join(path, "test_costs.csv"), test_costs, delimiter=",", fmt='%.5f')
     np.savetxt(os.path.join(path, "avg_backprop_angles.csv"), avg_backprop_angles, delimiter=",", fmt='%.5f')
     np.savetxt(os.path.join(path, "errors.csv"), errors, delimiter=",", fmt='%.2f')
