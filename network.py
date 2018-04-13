@@ -15,8 +15,9 @@ from comet_ml import Experiment
 import time
 import misc
 import json
+import shutil
 
-use_comet             = False # whether to use Comet.ml
+use_comet             = True # whether to use Comet.ml
 comet_experiment_name = "Multiplexing"
 
 cuda = torch.cuda.is_available()
@@ -54,7 +55,7 @@ elif n_layers == 3: # One hidden layer
     Z_std             = [0, 0.01]
     Y_std             = [0, 0.005]
     f_etas            = [0, 0.5, 0.01]
-    r_etas            = [0, 0.01]
+    r_etas            = [0, 0.001]
     b_etas            = [0, 0.0]
     output_burst_prob = 0.2
     min_Z             = 0.1
@@ -152,8 +153,8 @@ def backward(Y, Z, W, b, u, u_t, p, p_t, beta, beta_t, v, h, mean_c, t_input):
                 u[i]   = W[i+1].transpose(0, 1).mm(beta[i+1]*output_burst_prob*relu_deriv(beta[i+1]))/c
                 u_t[i] = W[i+1].transpose(0, 1).mm(beta_t[i+1]*output_burst_prob*relu_deriv(beta_t[i+1]))/c
             else:
-                u[i]   = W[i+1].transpose(0, 1).mm(beta[i+1])/c
-                u_t[i] = W[i+1].transpose(0, 1).mm(beta_t[i+1])/c
+                u[i]   = W[i+1].transpose(0, 1).mm(p[i+1]*softplus_deriv(v[i+1]))/c
+                u_t[i] = W[i+1].transpose(0, 1).mm(p_t[i+1]*softplus_deriv(v[i+1]))/c
 
             max_u[i] = torch.sum(torch.abs(Y[i]), dim=1).unsqueeze(1)/mean_c[i]
 
@@ -232,6 +233,11 @@ def train(folder_prefix=None, continuing_folder=None):
             f.write("Output layer burst probability: {}\n".format(output_burst_prob))
             f.write("Minimum Z value: {}\n".format(min_Z))
             f.write("Max apical potential: {}\n".format(u_range))
+
+        filename = os.path.basename(__file__)
+        if filename.endswith('pyc'):
+            filename = filename[:-1]
+        shutil.copyfile(filename, os.path.join(folder, filename))
 
         params_dict = {'timestamp'        : timestamp,
                        'continuing_folder': continuing_folder,
