@@ -17,7 +17,7 @@ import misc
 import json
 import shutil
 
-use_comet             = True # whether to use Comet.ml
+use_comet             = False # whether to use Comet.ml
 comet_experiment_name = "Multiplexing"
 
 cuda = torch.cuda.is_available()
@@ -53,8 +53,8 @@ elif n_layers == 3: # One hidden layer
     n_units           = [784, 500, 10]
     W_std             = [0, 0.05, 0.01]
     Z_std             = [0, 0.01]
-    Y_std             = [0, 0.005]
-    f_etas            = [0, 0.5, 0.01]
+    Y_std             = [0, 0.01]
+    f_etas            = [0, 2.0, 0.01]
     r_etas            = [0, 0.0]
     b_etas            = [0, 0.0]
     output_burst_prob = 0.2
@@ -63,12 +63,12 @@ elif n_layers == 3: # One hidden layer
     W_decay           = 0
 elif n_layers == 4: # Two hidden layers
     n_units           = [784, 500, 300, 10]
-    W_std             = [0, 0.1, 0.1, 0.1]
-    Z_std             = [0, 0.1, 0.1]
+    W_std             = [0, 0.05, 0.05, 0.01]
+    Z_std             = [0, 0.01, 0.01]
     Y_std             = [0, 1.0, 1.0]
-    f_etas            = [0, 0.1, 0.1, 0.1]
-    b_etas            = [0, 0.01, 0.01]
-    r_etas            = [0, 0.01, 0.01]
+    f_etas            = [0, 1.0, 1.0, 0.01]
+    b_etas            = [0, 0.001, 0.001]
+    r_etas            = [0, 0.0, 0.0]
     output_burst_prob = 0.2
     min_Z             = 0.1
     u_range           = 2
@@ -101,6 +101,10 @@ def softplus(x, limit=30):
 
 def softplus_deriv(x):
     return torch.nn.functional.sigmoid(Variable(x)).data
+    # y = x.clone()
+    # y[y > 0.5] = 1
+    # y[y <= 0.5] = 0
+    # return y
 
 def relu(x, baseline=0):
     return torch.nn.functional.relu(Variable(x)).data
@@ -119,7 +123,7 @@ def forward(W, b, v, h, f_input):
         else:
             h[i] = relu(v[i])
 
-def backward(Y, Z, W, b, u, u_t, p, p_t, beta, beta_t, v, h, mean_c, t_input):
+def backward(Y, Z, W, b, u, u_t, p, p_t, beta, beta_t, v, h, mean_c, t_input, ):
     cost   = [0] + [ 0 for i in range(1, n_layers) ]
     cost_Y = [0] + [ 0 for i in range(1, n_layers-1) ]
     cost_Z = [0] + [ 0 for i in range(1, n_layers-1) ]
@@ -150,16 +154,16 @@ def backward(Y, Z, W, b, u, u_t, p, p_t, beta, beta_t, v, h, mean_c, t_input):
             mean_c[i] = 0.5*mean_c[i] + 0.5*c
 
             if i == n_layers-2:
-                u[i]   = W[i+1].transpose(0, 1).mm(beta[i+1]*output_burst_prob*relu_deriv(beta[i+1]))/c
-                u_t[i] = W[i+1].transpose(0, 1).mm(beta_t[i+1]*output_burst_prob*relu_deriv(beta_t[i+1]))/c
+                u[i]   = W[i+1].transpose(0, 1).mm(beta[i+1]*output_burst_prob*relu_deriv(beta[i+1]))
+                u_t[i] = W[i+1].transpose(0, 1).mm(beta_t[i+1]*output_burst_prob*relu_deriv(beta_t[i+1]))
             else:
-                u[i]   = W[i+1].transpose(0, 1).mm(p[i+1]*softplus_deriv(v[i+1]))/c
-                u_t[i] = W[i+1].transpose(0, 1).mm(p_t[i+1]*softplus_deriv(v[i+1]))/c
+                u[i]   = W[i+1].transpose(0, 1).mm(p[i+1]*softplus_deriv(v[i+1]))
+                u_t[i] = W[i+1].transpose(0, 1).mm(p_t[i+1]*softplus_deriv(v[i+1]))
 
             max_u[i] = torch.sum(torch.abs(Y[i]), dim=1).unsqueeze(1)/mean_c[i]
 
-            p[i]   = torch.sigmoid(u[i])
-            p_t[i] = torch.sigmoid(u_t[i])
+            p[i]   = u[i]
+            p_t[i] = u_t[i]
 
             beta[i]   = p[i]*h[i]
             beta_t[i] = p_t[i]*h[i]
@@ -180,7 +184,6 @@ def backward(Y, Z, W, b, u, u_t, p, p_t, beta, beta_t, v, h, mean_c, t_input):
             delta_Z[i] = (-u[i])*(u[i]/c).mm(h[i].transpose(0, 1)) - (min_Z - Z[i])
 
     return cost, cost_Y, cost_Z, delta_W, delta_b, delta_Y, delta_Z, max_u, delta_b_backprop
-
 
 def update_weights(W, b, Y, Z, delta_W, delta_b, delta_Y, delta_Z):
     for i in range(1, n_layers):
@@ -264,12 +267,8 @@ def train(folder_prefix=None, continuing_folder=None):
     if continuing_folder is not None:
         W, b, Y, Z, mean_c = load_dynamic_variables(continuing_folder)
 
-    costs               = np.zeros((n_layers-1, n_epochs*n_examples))
-    Y_costs             = np.zeros((n_layers-2, n_epochs*n_examples))
-    Z_costs             = np.zeros((n_layers-2, n_epochs*n_examples))
-    avg_costs           = np.zeros((n_layers-1, n_epochs*int(n_examples//1000)))
-    avg_Y_costs         = np.zeros((n_layers-2, n_epochs*int(n_examples//1000)))
-    avg_Z_costs         = np.zeros((n_layers-2, n_epochs*int(n_examples//1000)))
+    costs               = np.zeros((n_layers, n_epochs*n_examples))
+    avg_costs           = np.zeros((n_layers, n_epochs*int(n_examples//1000)))
     test_costs          = np.zeros(n_epochs*int(n_examples//1000)+1)
     backprop_angles     = np.zeros((n_layers-2, n_epochs*n_examples))
     avg_backprop_angles = np.zeros((n_layers-2, n_epochs*int(n_examples//1000)))
@@ -296,7 +295,7 @@ def train(folder_prefix=None, continuing_folder=None):
                 hyper_params["Y_std_{}".format(i)]   = Y_std[i]
                 hyper_params["b_etas_{}".format(i)]  = b_etas[i]
                 hyper_params["r_etas_{}".format(i)]  = r_etas[i]
-            
+
         experiment = Experiment(api_key=misc.comet_api_key, project_name=comet_experiment_name)
         experiment.log_multiple_params(hyper_params)
 
@@ -314,11 +313,11 @@ def train(folder_prefix=None, continuing_folder=None):
 
     if folder is not None:
         save_dynamic_variables(folder, W, b, Y, Z, mean_c)
-        save_results(folder, avg_costs, backprop_angles, errors, test_costs, avg_Y_costs, avg_Z_costs)
+        save_results(folder, costs, backprop_angles, errors, test_costs)
 
     for epoch_num in range(n_epochs):
         start_time = time.time()
-        
+
         if use_comet:
             experiment.log_current_epoch(epoch_num)
 
@@ -347,9 +346,7 @@ def train(folder_prefix=None, continuing_folder=None):
                 train_error += 1
 
             cost, cost_Y, cost_Z, delta_W, delta_b, delta_Y, delta_Z, max_u, delta_b_backprop = backward(Y, Z, W, b, u, u_t, p, p_t, beta, beta_t, v, h, mean_c, t_input=t)
-            costs[:, epoch_num*n_examples + example_num] = cost[1:]
-            Y_costs[:, epoch_num*n_examples + example_num] = cost_Y[1:]
-            Z_costs[:, epoch_num*n_examples + example_num] = cost_Z[1:]
+            costs[:, epoch_num*n_examples + example_num] = cost
 
             backprop_angle = np.array([ (180/np.pi)*np.arccos(delta_b_backprop[i].squeeze().dot(delta_b[i].squeeze())/(1e-10 + torch.norm(delta_b_backprop[i])*torch.norm(delta_b[i]))) for i in range(1, n_layers-1) ])
             backprop_angles[:, epoch_num*n_examples + example_num] = backprop_angle
@@ -365,8 +362,6 @@ def train(folder_prefix=None, continuing_folder=None):
 
                     for i in range(1, n_layers):
                         if i < n_layers-1:
-                            experiment.log_metric("Y_loss_{}", float(cost_Y[i]), step=example_num+1)
-                            experiment.log_metric("Z_loss_{}", float(cost_Z[i]), step=example_num+1)
                             experiment.log_metric("bp_angle_{}".format(i), backprop_angle[i-1], step=abs_ex_num+1)
                             experiment.log_metric("min_u_{}", min_us[i-1, abs_ex_num], step=abs_ex_num+1)
                             experiment.log_metric("max_u_{}", max_us[i-1, abs_ex_num], step=abs_ex_num+1)
@@ -382,8 +377,6 @@ def train(folder_prefix=None, continuing_folder=None):
 
                 avg_backprop_angles[:, index-1] = np.mean(backprop_angles[:, abs_ex_num-999:abs_ex_num+1], axis=1)
                 avg_costs[:, index-1]           = np.mean(costs[:, abs_ex_num-999:abs_ex_num+1], axis=1)
-                avg_Y_costs[:, index-1]         = np.mean(Y_costs[:, abs_ex_num-999:abs_ex_num+1], axis=1)
-                avg_Z_costs[:, index-1]         = np.mean(Z_costs[:, abs_ex_num-999:abs_ex_num+1], axis=1)
 
                 # print test error
                 print("Epoch {}, ex {}. Test Error: {}%. Test Cost: {}. Train Cost: {}.".format(epoch_num+1, example_num+1, errors[index], test_costs[index], avg_costs[-1, index-1]))
@@ -399,7 +392,7 @@ def train(folder_prefix=None, continuing_folder=None):
 
                 if folder is not None:
                     save_dynamic_variables(folder, W, b, Y, Z, mean_c)
-                    save_results(folder, avg_costs, avg_backprop_angles, errors, test_costs, avg_Y_costs, avg_Z_costs)
+                    save_results(folder, avg_costs, avg_backprop_angles, errors, test_costs)
 
         end_time = time.time()
 
@@ -470,7 +463,7 @@ def gradient_check():
                 percent = 100*(j*W[i].shape[1] + k)/(W[i].shape[0]*W[i].shape[1])
                 if percent % 5 == 0:
                     print("Computing numerical gradient for layer {}... {}% done.".format(i, percent))
-                
+
                 W[i][j, k] -= epsilon
 
                 if i > 1:
@@ -552,10 +545,8 @@ def save_dynamic_variables(path, W, b, Y, Z, mean_c):
     }
     torch.save(state, os.path.join(path, "state.dat"))
 
-def save_results(path, avg_costs, avg_backprop_angles, errors, test_costs, avg_Y_costs, avg_Z_costs):
+def save_results(path, avg_costs, avg_backprop_angles, errors, test_costs):
     np.savetxt(os.path.join(path, "avg_costs.csv"), avg_costs, delimiter=",", fmt='%.5f')
-    np.savetxt(os.path.join(path, "avg_Y_costs.csv"), avg_Y_costs, delimiter=",", fmt='%.5f')
-    np.savetxt(os.path.join(path, "avg_Z_costs.csv"), avg_Z_costs, delimiter=",", fmt='%.5f')
     np.savetxt(os.path.join(path, "test_costs.csv"), test_costs, delimiter=",", fmt='%.5f')
     np.savetxt(os.path.join(path, "avg_backprop_angles.csv"), avg_backprop_angles, delimiter=",", fmt='%.5f')
     np.savetxt(os.path.join(path, "errors.csv"), errors, delimiter=",", fmt='%.2f')
