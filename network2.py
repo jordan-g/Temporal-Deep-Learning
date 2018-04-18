@@ -322,7 +322,7 @@ def train(folder_prefix=None, continuing_folder=None):
                 min_hs = [min_hs[i]/(store+1) for i in range(n_layers-1)]
                 max_hs = [max_hs[i]/(store+1) for i in range(n_layers-1)]
                 
-                where = (abs_ex_num+1)//store
+                where = epoch_num + example_num/n_examples
                 if use_comet:
                     with experiment.train():
                         experiment.log_metric("loss", avg_costs[-1], step=where)
