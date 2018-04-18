@@ -366,8 +366,8 @@ def train(folder_prefix=None, continuing_folder=None):
 
                 if use_comet:
                     with experiment.validate():
-                        experiment.log_metric("accuracy", 100 - errors, step=abs_ex_num)
-                        experiment.log_metric("cost", test_costs, step=abs_ex_num)
+                        experiment.log_metric("accuracy", 100 - errors, step=where)
+                        experiment.log_metric("cost", test_costs, step=where)
 
                 if folder is not None:
                     save_dynamic_variables(folder, W, b, Y, Z, mean_c)
