@@ -89,13 +89,13 @@ def backward(Y, Z, W, b, u, u_t, p, p_t, beta, beta_t, v, h, mean_c, t_input):
                 u[i]   = W[i+1].transpose(0, 1).mm(beta[i+1]*output_burst_prob*relu_deriv(beta[i+1]))
                 u_t[i] = W[i+1].transpose(0, 1).mm(beta_t[i+1]*output_burst_prob*relu_deriv(beta_t[i+1]))
             else:
-                u[i]   = W[i+1].transpose(0, 1).mm(p[i+1]*h[i+1])
-                u_t[i] = W[i+1].transpose(0, 1).mm(p_t[i+1]*h[i+1])
+                u[i]   = W[i+1].transpose(0, 1).mm(p[i+1]*softplus_deriv(v[i+1]))
+                u_t[i] = W[i+1].transpose(0, 1).mm(p_t[i+1]*softplus_deriv(v[i+1]))
 
             max_u[i] = torch.sum(torch.abs(Y[i]), dim=1).unsqueeze(1)/mean_c[i]
 
-            p[i]   = u[i]
-            p_t[i] = u_t[i]
+            p[i]   = torch.sigmoid(u[i])
+            p_t[i] = torch.sigmoid(u_t[i])
 
             beta[i]   = p[i]*h[i]
             beta_t[i] = p_t[i]*h[i]
@@ -104,7 +104,7 @@ def backward(Y, Z, W, b, u, u_t, p, p_t, beta, beta_t, v, h, mean_c, t_input):
             cost_Z[i] = 0.5*torch.sum((u[i])**2) + 0.5*torch.sum((min_Z - Z[i])**2)
             cost_Y[i] = 0.5*torch.sum((u_range - max_u[i])**2)
 
-            e          = -(p_t[i] - p[i])*h[i]
+            e          = -(p_t[i] - p[i])*softplus_deriv(v[i])
             delta_W[i] = e.mm(h[i-1].transpose(0, 1))
             delta_b[i] = e
 

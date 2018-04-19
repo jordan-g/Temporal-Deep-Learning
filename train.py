@@ -1,5 +1,4 @@
 import numpy as np
-import network2 as net
 import sys
 import argparse
 
@@ -25,6 +24,18 @@ parser.add_argument("-use_comet",type=bool, help="Use Comet",default=False)
 parser.add_argument("-info",type=str, help="Information",default="Normal")
 args=parser.parse_args()
 
+
+tmp = args.info
+if tmp == "Normal":
+	import network0 as net
+elif tmp == "Sigmoid":
+	import network1 as net
+elif tmp == "Exp_deriv":
+	import network2 as net
+elif tmp == "Sigmoid_Exp_deriv":
+	import network3 as net
+else:
+	raise ValueError("Unknown parameter")
 
 folder_prefix = args.directory
 net.n_epochs  = args.n_epochs

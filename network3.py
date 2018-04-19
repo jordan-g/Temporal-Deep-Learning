@@ -94,8 +94,8 @@ def backward(Y, Z, W, b, u, u_t, p, p_t, beta, beta_t, v, h, mean_c, t_input):
 
             max_u[i] = torch.sum(torch.abs(Y[i]), dim=1).unsqueeze(1)/mean_c[i]
 
-            p[i]   = u[i]
-            p_t[i] = u_t[i]
+            p[i]   = torch.sigmoid(u[i])
+            p_t[i] = torch.sigmoid(u_t[i])
 
             beta[i]   = p[i]*h[i]
             beta_t[i] = p_t[i]*h[i]
