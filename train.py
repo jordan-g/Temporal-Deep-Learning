@@ -34,6 +34,8 @@ elif tmp == "Exp_deriv":
 	import network2 as net
 elif tmp == "Sigmoid_Exp_deriv":
 	import network3 as net
+elif tmp == "Sigmoid_Fix_Recur":
+	import network6 as net
 else:
 	raise ValueError("Unknown parameter")
 
