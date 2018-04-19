@@ -34,6 +34,10 @@ elif tmp == "Exp_deriv":
 	import network2 as net
 elif tmp == "Sigmoid_Exp_deriv":
 	import network3 as net
+elif tmp == "Exp_activation_deriv":
+	import network4 as net
+elif tmp == "Sigmoid_Exp_activation_deriv":
+	import network5 as net
 else:
 	raise ValueError("Unknown parameter")
 
