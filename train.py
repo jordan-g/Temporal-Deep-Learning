@@ -38,6 +38,8 @@ elif tmp == "Exp_activation_deriv":
 	import network4 as net
 elif tmp == "Sigmoid_Exp_activation_deriv":
 	import network5 as net
+elif tmp == "Sigmoid_Fix_Recur":
+	import network6 as net
 else:
 	raise ValueError("Unknown parameter")
 
