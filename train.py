@@ -28,22 +28,31 @@ args=parser.parse_args()
 tmp = args.info
 if tmp == "Normal":
 	import network0 as net
+	net.ref = 0
 elif tmp == "Sigmoid":
 	import network1 as net
+	net.ref = 1
 elif tmp == "Exp_deriv":
 	import network2 as net
+	net.ref = 2
 elif tmp == "Sigmoid_Exp_deriv":
 	import network3 as net
+	net.ref = 3
 elif tmp == "Exp_activation_deriv":
 	import network4 as net
+	net.ref = 4
 elif tmp == "Sigmoid_Exp_activation_deriv":
 	import network5 as net
+	net.ref = 5
 elif tmp == "Sigmoid_Fix_Recur":
 	import network6 as net
+	net.ref = 6
 elif tmp == "Sigmoid_Exp_activation_deriv_Fix_Recur":
 	import network7 as net
+	net.ref = 7
 elif tmp == "Sigmoid_Learn_Recur_New_Cost":
 	import network8 as net
+	net.ref = 8
 else:
 	raise ValueError("Unknown parameter")
 
