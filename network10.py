@@ -86,11 +86,11 @@ def backward(Y, Z, W, b, u, u_t, p, p_t, beta, beta_t, v, h, mean_c, t_input):
             mean_c[i] = 0.5*mean_c[i] + 0.5*c
 
             if i == n_layers-2:
-                u[i]   = W[i+1].transpose(0, 1).mm(beta[i+1]*output_burst_prob*relu_deriv(beta[i+1]))/c
-                u_t[i] = W[i+1].transpose(0, 1).mm(beta_t[i+1]*output_burst_prob*relu_deriv(beta_t[i+1]))/c
+                u[i]   = W[i+1].transpose(0, 1).mm(beta[i+1]*output_burst_prob*relu_deriv(beta[i+1]))/mean_c[i]
+                u_t[i] = W[i+1].transpose(0, 1).mm(beta_t[i+1]*output_burst_prob*relu_deriv(beta_t[i+1]))/mean_c[i]
             else:
-                u[i]   = W[i+1].transpose(0, 1).mm(p[i+1]*softplus_deriv(v[i+1]))/c
-                u_t[i] = W[i+1].transpose(0, 1).mm(p_t[i+1]*softplus_deriv(v[i+1]))/c
+                u[i]   = W[i+1].transpose(0, 1).mm(p[i+1]*softplus_deriv(v[i+1]))/mean_c[i]
+                u_t[i] = W[i+1].transpose(0, 1).mm(p_t[i+1]*softplus_deriv(v[i+1]))/mean_c[i]
 
             max_u[i] = torch.sum(torch.abs(Y[i]), dim=1).unsqueeze(1)/mean_c[i]
 
@@ -113,7 +113,7 @@ def backward(Y, Z, W, b, u, u_t, p, p_t, beta, beta_t, v, h, mean_c, t_input):
             e_Y = -(u_range - max_u[i])/mean_c[i]
             delta_Y[i] = torch.sign(Y[i]).transpose(0, 1).mm(e_Y).transpose(0, 1)
 
-            delta_Z[i] = ((min_Z-u[i])*(u[i]/c)).mm(h[i].transpose(0, 1))
+            delta_Z[i] = (min_Z-u[i])*(u[i]/mean_c[i]).mm(h[i].transpose(0, 1))
 
     return cost, cost_Y, cost_Z, delta_W, delta_b, delta_Y, delta_Z, max_u, delta_b_backprop
 

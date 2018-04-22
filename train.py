@@ -53,6 +53,12 @@ elif tmp == "Sigmoid_Exp_activation_deriv_Fix_Recur":
 elif tmp == "Sigmoid_Learn_Recur_New_Cost":
 	import network8 as net
 	net.ref = 8
+elif tmp == "Debug_8_Mean_c":
+	import network9 as net
+	net.ref = 9
+elif tmp == "Debug_8_Mean_c_intime":
+	import network10 as net
+	net.ref = 10
 elif tmp == "Sigmoid_Learn_Recur_New_Cost_c_stats":
 	import network11 as net
 	net.ref = 11
