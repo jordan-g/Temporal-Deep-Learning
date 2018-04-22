@@ -53,6 +53,9 @@ elif tmp == "Sigmoid_Exp_activation_deriv_Fix_Recur":
 elif tmp == "Sigmoid_Learn_Recur_New_Cost":
 	import network8 as net
 	net.ref = 8
+elif tmp == "Sigmoid_Learn_Recur_New_Cost_c_stats":
+	import network11 as net
+	net.ref = 11
 else:
 	raise ValueError("Unknown parameter")
 
