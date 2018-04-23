@@ -87,7 +87,7 @@ def backward(Y, Z, W, b, u, u_t, p, p_t, beta, beta_t, v, h, mean_c, c, t_input)
 
             if i == n_layers-2:
                 u[i]   = Y[i].mm(beta[i+1]*output_burst_prob*relu_deriv(beta[i+1]))/c[i]
-                u_t[i] = Y[i].mm(beta_t[i+1]*output_burst_prob*relu_deriv(beta_t[i+1]))/c[i]
+                u_t[i] = Y[i].mm(beta_t[i+1]*output_burst_prob*relu_deriv(beta[i+1]))/c[i]
             else:
                 u[i]   = Y[i].mm(p[i+1]*softplus_deriv(v[i+1]))/c[i]
                 u_t[i] = Y[i].mm(p_t[i+1]*softplus_deriv(v[i+1]))/c[i]
@@ -521,13 +521,13 @@ def create_training_data():
 
 def create_dynamic_variables(symmetric_weights=False):
     # create network variables
-    W      = [0] + [ torch.from_numpy(np.random.normal(0, W_std[i], size=(n_units[i], n_units[i-1]))).type(dtype) for i in range(1, n_layers) ]
+    W      = [0] + [ torch.from_numpy(np.random.uniform(-W_std[i], W_std[i], size=(n_units[i], n_units[i-1]))).type(dtype) for i in range(1, n_layers) ]
     W[-1] += 0.001
     b      = [0] + [ torch.from_numpy(np.zeros((n_units[i], 1))).type(dtype) for i in range(1, n_layers) ]
     if symmetric_weights:
         Y  = [0] + [ torch.from_numpy(W[i+1].T.copy()).type(dtype) for i in range(1, n_layers-1) ]
     else:
-        Y  = [0] + [ torch.from_numpy(np.random.normal(0, Y_std[i], size=(n_units[i], n_units[i+1]))).type(dtype) for i in range(1, n_layers-1) ]
+        Y  = [0] + [ torch.from_numpy(np.random.uniform(-Y_std[i], Y_std[i], size=(n_units[i], n_units[i+1]))).type(dtype) for i in range(1, n_layers-1) ]
     Z      = [0] + [ torch.from_numpy(np.random.uniform(0, Z_std[i], size=(n_units[i], n_units[i]))).type(dtype) for i in range(1, n_layers-1) ]
     v      = [0] + [ torch.from_numpy(np.zeros(n_units[i])).type(dtype) for i in range(1, n_layers) ]
     h      = [0] + [ torch.from_numpy(np.zeros(n_units[i])).type(dtype) for i in range(1, n_layers) ]
@@ -538,9 +538,8 @@ def create_dynamic_variables(symmetric_weights=False):
     beta   = [0] + [ torch.from_numpy(np.zeros(n_units[i])).type(dtype) for i in range(1, n_layers) ]
     beta_t = [0] + [ torch.from_numpy(np.zeros(n_units[i])).type(dtype) for i in range(1, n_layers) ]
     mean_c = [0] + [ torch.from_numpy(np.zeros((n_units[i], 1))).type(dtype) for i in range(1, n_layers-1) ]
-    c      = [0] + [ torch.from_numpy(np.zeros((n_units[i], 1))).type(dtype) for i in range(1, n_layers-1) ]
 
-    return W, b, Y, Z, v, h, u, u_t, p, p_t, beta, beta_t, mean_c, c
+    return W, b, Y, Z, v, h, u, u_t, p, p_t, beta, beta_t, mean_c
 
 def load_dynamic_variables(path):
     state = torch.load(os.path.join(path, "state.dat"))
