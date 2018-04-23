@@ -81,7 +81,7 @@ def backward(Y, Z, W, b, u, u_t, p, p_t, beta, beta_t, v, h, mean_c, t_input):
 
             delta_b_backprop[i] = -(beta_t[i] - beta[i])*output_burst_prob*relu_deriv(h[i])
         else:
-            c = Z[i].mm(h[i])
+            c = 1 + Z[i].mm(h[i])
 
             mean_c[i] = 0.5*mean_c[i] + 0.5*c
 
@@ -101,7 +101,7 @@ def backward(Y, Z, W, b, u, u_t, p, p_t, beta, beta_t, v, h, mean_c, t_input):
             beta_t[i] = p_t[i]*h[i]
 
             cost[i]   = 0.5*torch.mean((beta_t[i] - beta[i])**2)
-            cost_Z[i] = 0.5*torch.sum((u[i])**2) + 0.5*torch.sum((min_Z - Z[i])**2)
+            cost_Z[i] = 0.5*torch.sum((min_Z - u[i])**2)
             cost_Y[i] = 0.5*torch.sum((u_range - max_u[i])**2)
 
             e          = -(p_t[i] - p[i])*softplus_deriv(v[i])
@@ -113,7 +113,7 @@ def backward(Y, Z, W, b, u, u_t, p, p_t, beta, beta_t, v, h, mean_c, t_input):
             e_Y = -(u_range - max_u[i])/mean_c[i]
             delta_Y[i] = torch.sign(Y[i]).transpose(0, 1).mm(e_Y).transpose(0, 1)
 
-            delta_Z[i] = (-u[i])*(u[i]/c).mm(h[i].transpose(0, 1)) - (min_Z - Z[i])
+            delta_Z[i] = ((min_Z-u[i])*(u[i]/c[i])).mm(h[i].transpose(0, 1)) #Not Beta here?
 
     return cost, cost_Y, cost_Z, delta_W, delta_b, delta_Y, delta_Z, max_u, delta_b_backprop
 
