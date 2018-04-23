@@ -232,6 +232,8 @@ def train(folder_prefix=None, continuing_folder=None):
     avg_std_cs          = np.zeros(n_layers-2)
     errors              = 0
     train_error         = 0
+    avg_W_std           = np.zeros(n_layers-1)
+    avg_W_mean          = np.zeros(n_layers-1)
 
     if use_comet:
         hyper_params = {
@@ -312,6 +314,8 @@ def train(folder_prefix=None, continuing_folder=None):
             max_hs              += [ torch.max(h[i]) for i in range(1, n_layers) ]
             avg_cs              += [ torch.mean(c[i]) for i in range(1, n_layers-1) ]
             avg_std_cs          += [ torch.std(c[i]) for i in range(1, n_layers-1) ]
+            avg_W_std += [ torch.std(W[i]) for i in range(1, n_layers) ]
+            avg_W_mean += [ torch.mean(W[i]) for i in range(1, n_layers) ]
 
             update_weights(W, b, Y, Z, delta_W, delta_b, delta_Y, delta_Z)
 
@@ -327,6 +331,8 @@ def train(folder_prefix=None, continuing_folder=None):
                 avg_cs              = [avg_cs[i]/(store+1) for i in range(n_layers-2)]
                 avg_std_cs          = [avg_std_cs[i]/(store+1) for i in range(n_layers-2)]
                 std_cs              = [torch.std(c[i]) for i in range(1, n_layers-1)]
+                avg_W_std = [avg_W_std[i]/(store+1) for i in range(n_layers-1)]
+                avg_W_mean = [avg_W_mean[i]/(store+1) for i in range(n_layers-1)]
                 
                 where = (abs_ex_num+1)//store
                 if use_comet:
@@ -354,6 +360,10 @@ def train(folder_prefix=None, continuing_folder=None):
                     writer.add_scalar('6_avg_costs_o', avg_costs[-1], where)
                     writer.add_scalar('7_avg_costs_h', avg_costs[-2], where)
                     writer.add_scalar('8_avg_backprop_angles', avg_backprop_angles[-1], where)
+                    writer.add_scalar('9_avg_W_std_o', avg_W_std[-1], where)
+                    writer.add_scalar('10_avg_W_std_h', avg_W_std[-2], where)
+                    writer.add_scalar('11_avg_W_mean_o', avg_W_mean[-1], where)
+                    writer.add_scalar('12_avg_W_mean_h', avg_W_mean[-2], where)
                     writer.add_scalar('us_min_h', min_us[-1], where)
                     writer.add_scalar('us_max_h', max_us[-1], where)
                     writer.add_scalar('hs_min_o', min_hs[-1], where)
@@ -396,6 +406,8 @@ def train(folder_prefix=None, continuing_folder=None):
                 avg_cs              = np.zeros(n_layers-2)
                 avg_std_cs          = np.zeros(n_layers-2)
                 std_cs              = np.zeros(n_layers-2)
+                avg_W_std           = np.zeros(n_layers-1)
+                avg_W_mean          = np.zeros(n_layers-1)
 
         end_time = time.time()
         print("Elapsed time: {} s.".format(end_time - start_time))
