@@ -68,7 +68,7 @@ def forward(W, b, v, h, f_input):
         else:
             h[i] = relu(v[i])
 
-def backward(Y, Z, W, b, u, u_t, p, p_t, beta, beta_t, v, h, mean_c, t_input):
+def backward(Y, Z, W, b, u, u_t, p, p_t, beta, beta_t, v, h, mean_c, c, t_input):
     for i in range(n_layers-1, 0, -1):
         if i == n_layers-1:
             beta[i]   = output_burst_prob*h[i]
@@ -81,9 +81,9 @@ def backward(Y, Z, W, b, u, u_t, p, p_t, beta, beta_t, v, h, mean_c, t_input):
 
             delta_b_backprop[i] = -(beta_t[i] - beta[i])*output_burst_prob*relu_deriv(h[i])
         else:
-            c = Z[i].mm(h[i])
+            c[i] = 1 + Z[i].mm(h[i])
 
-            mean_c[i] = 0.5*mean_c[i] + 0.5*c
+            mean_c[i] = 0.5*mean_c[i] + 0.5*c[i]
 
             if i == n_layers-2:
                 u[i]   = Y[i].mm(beta[i+1]*output_burst_prob*relu_deriv(beta[i+1]))
@@ -101,7 +101,7 @@ def backward(Y, Z, W, b, u, u_t, p, p_t, beta, beta_t, v, h, mean_c, t_input):
             beta_t[i] = p_t[i]*h[i]
 
             cost[i]   = 0.5*torch.mean((beta_t[i] - beta[i])**2)
-            cost_Z[i] = 0.5*torch.sum((u[i])**2) + 0.5*torch.sum((min_Z - Z[i])**2)
+            cost_Z[i] = 0.5*torch.sum((min_Z - u[i])**2)
             cost_Y[i] = 0.5*torch.sum((u_range - max_u[i])**2)
 
             e          = -(p_t[i] - p[i])*softplus_deriv(v[i])
@@ -112,10 +112,9 @@ def backward(Y, Z, W, b, u, u_t, p, p_t, beta, beta_t, v, h, mean_c, t_input):
 
             e_Y = -(u_range - max_u[i])/mean_c[i]
             delta_Y[i] = torch.sign(Y[i]).transpose(0, 1).mm(e_Y).transpose(0, 1)
+            delta_Z[i] = ((min_Z-u[i])*(u[i]/c[i])).mm(h[i].transpose(0, 1)) #Not Beta here?
 
-            delta_Z[i] = (-u[i])*(u[i]/c).mm(h[i].transpose(0, 1)) - (min_Z - Z[i])
-
-    return cost, cost_Y, cost_Z, delta_W, delta_b, delta_Y, delta_Z, max_u, delta_b_backprop
+    return cost, cost_Y, cost_Z, delta_W, delta_b, delta_Y, delta_Z, max_u, delta_b_backprop, mean_c, c
 
 
 def update_weights(W, b, Y, Z, delta_W, delta_b, delta_Y, delta_Z):
@@ -146,7 +145,7 @@ def train(folder_prefix=None, continuing_folder=None):
         Z_std_string   = " ".join([ str(i) for i in Z_std[1:] ])
         Y_std_string   = " ".join([ str(i) for i in Y_std[1:] ])
 
-        folder = "Tensorboard/" + "{} - {} - {} - {} - {} - {} - {} - {} - {} - {} - {} - {} - ".format(folder_prefix, str(ref), n_units_string, f_etas_string, b_etas_string, r_etas_string, W_std_string, Z_std_string, Y_std_string, output_burst_prob, min_Z, u_range) + info
+        folder = "Tensorboard/" + "{} - {} - {} - {} - {} - {} - {} - {} - {} - {} - {} - {} - ".format(folder_prefix, str(ref), n_units_string, f_etas_string, b_etas_string, r_etas_string, W_std_string, Z_std_string, Y_std_string, output_burst_prob, min_Z, u_range) + info +"_+1"
     else:
         folder = None
 
@@ -205,7 +204,7 @@ def train(folder_prefix=None, continuing_folder=None):
         with open(os.path.join(folder, "params.json"), 'w') as f:
             json.dump(params_dict, f)
 
-    W, b, Y, Z, v, h, u, u_t, p, p_t, beta, beta_t, mean_c = create_dynamic_variables(symmetric_weights=False)
+    W, b, Y, Z, v, h, u, u_t, p, p_t, beta, beta_t, mean_c, c = create_dynamic_variables(symmetric_weights=False)
     if continuing_folder is not None:
         W, b, Y, Z, mean_c = load_dynamic_variables(continuing_folder)
 
@@ -229,6 +228,8 @@ def train(folder_prefix=None, continuing_folder=None):
     max_us              = np.zeros(n_layers-2)
     min_hs              = np.zeros(n_layers-1)
     max_hs              = np.zeros(n_layers-1)
+    avg_cs              = np.zeros(n_layers-2)
+    avg_std_cs          = np.zeros(n_layers-2)
     errors              = 0
     train_error         = 0
 
@@ -299,28 +300,33 @@ def train(folder_prefix=None, continuing_folder=None):
             if predicted_class != target_class:
                 train_error += 1
 
-            cost, cost_Y, cost_Z, delta_W, delta_b, delta_Y, delta_Z, max_u, delta_b_backprop = backward(Y, Z, W, b, u, u_t, p, p_t, beta, beta_t, v, h, mean_c, t_input=t)
+            cost, cost_Y, cost_Z, delta_W, delta_b, delta_Y, delta_Z, max_u, delta_b_backprop, mean_c, c = backward(Y, Z, W, b, u, u_t, p, p_t, beta, beta_t, v, h, mean_c, c, t_input=t)
             avg_costs += cost[1:]
             avg_Y_costs += cost_Y[1:]
             avg_Z_costs += cost_Z[1:]
-            
             avg_backprop_angles += [(180/np.pi)*np.arccos(np.clip(delta_b_backprop[i].squeeze().dot(delta_b[i].squeeze())/(1e-10 + torch.norm(delta_b_backprop[i])*torch.norm(delta_b[i])),-1,1)) for i in range(1, n_layers-1)]
-            min_us += [ min(torch.min(u[i]), torch.min(u_t[i])) for i in range(1, n_layers-1) ]
-            max_us += [ max(torch.max(u[i]), torch.max(u_t[i])) for i in range(1, n_layers-1) ]
-            min_hs += [ torch.min(h[i]) for i in range(1, n_layers) ]
-            max_hs += [ torch.max(h[i]) for i in range(1, n_layers) ]
+            min_us              += [ min(torch.min(u[i]), torch.min(u_t[i])) for i in range(1, n_layers-1) ]
+            max_us              += [ max(torch.max(u[i]), torch.max(u_t[i])) for i in range(1, n_layers-1) ]
+            min_hs              += [ torch.min(h[i]) for i in range(1, n_layers) ]
+            max_hs              += [ torch.max(h[i]) for i in range(1, n_layers) ]
+            max_hs              += [ torch.max(h[i]) for i in range(1, n_layers) ]
+            avg_cs              += [ torch.mean(c[i]) for i in range(1, n_layers-1) ]
+            avg_std_cs          += [ torch.std(c[i]) for i in range(1, n_layers-1) ]
 
             update_weights(W, b, Y, Z, delta_W, delta_b, delta_Y, delta_Z)
 
             if (example_num+1) % store == 0:
-                avg_costs = [avg_costs[i]/(store+1) for i in range(n_layers-1)]
-                avg_Y_costs = [avg_Y_costs[i]/(store+1) for i in range(n_layers-2)]
-                avg_Z_costs = [avg_Z_costs[i]/(store+1) for i in range(n_layers-2)]
+                avg_costs           = [avg_costs[i]/(store+1) for i in range(n_layers-1)]
+                avg_Y_costs         = [avg_Y_costs[i]/(store+1) for i in range(n_layers-2)]
+                avg_Z_costs         = [avg_Z_costs[i]/(store+1) for i in range(n_layers-2)]
                 avg_backprop_angles = [avg_backprop_angles[i]/(store+1) for i in range(n_layers-2)]
-                min_us = [min_us[i]/(store+1) for i in range(n_layers-2)]
-                max_us = [max_us[i]/(store+1) for i in range(n_layers-2)]
-                min_hs = [min_hs[i]/(store+1) for i in range(n_layers-1)]
-                max_hs = [max_hs[i]/(store+1) for i in range(n_layers-1)]
+                min_us              = [min_us[i]/(store+1) for i in range(n_layers-2)]
+                max_us              = [max_us[i]/(store+1) for i in range(n_layers-2)]
+                min_hs              = [min_hs[i]/(store+1) for i in range(n_layers-1)]
+                max_hs              = [max_hs[i]/(store+1) for i in range(n_layers-1)]
+                avg_cs              = [avg_cs[i]/(store+1) for i in range(n_layers-2)]
+                avg_std_cs          = [avg_std_cs[i]/(store+1) for i in range(n_layers-2)]
+                std_cs              = [torch.std(c[i]) for i in range(1, n_layers-1)]
                 
                 where = (abs_ex_num+1)//store
                 if use_comet:
@@ -354,6 +360,9 @@ def train(folder_prefix=None, continuing_folder=None):
                     writer.add_scalar('hs_max_o', max_hs[-1], where)
                     writer.add_scalar('hs_min_h', min_hs[-2], where)
                     writer.add_scalar('hs_max_h', max_hs[-2], where)
+                    writer.add_scalar('cs_mean_h', avg_cs[-1], where)
+                    writer.add_scalar('cs_mean_std_h', avg_std_cs[-1], where)
+                    writer.add_scalar('cs_std_h', std_cs[-1], where)
 
                 # print test error
                 print("Epoch {}, ex {}. Test Error: {}%. Test Cost: {}. Train Cost: {}.".format(epoch_num+1, example_num+1, errors, test_costs, avg_costs[-1]))
@@ -384,7 +393,9 @@ def train(folder_prefix=None, continuing_folder=None):
                 max_hs              = np.zeros(n_layers-1)
                 errors              = 0
                 train_error         = 0
-
+                avg_cs              = np.zeros(n_layers-2)
+                avg_std_cs          = np.zeros(n_layers-2)
+                std_cs              = np.zeros(n_layers-2)
 
         end_time = time.time()
         print("Elapsed time: {} s.".format(end_time - start_time))
@@ -438,7 +449,7 @@ def plot_backprop_angles(backprop_angles, filename=None):
         plt.show()
 
 def gradient_check():
-    W, b, Y, Z, v, h, u, u_t, p, p_t, beta, beta_t, mean_c = create_dynamic_variables(symmetric_weights=True)
+    W, b, Y, Z, v, h, u, u_t, p, p_t, beta, beta_t, mean_c, c = create_dynamic_variables(symmetric_weights=True)
 
     # get input and target
     x = x_set[:, 0]
@@ -446,7 +457,7 @@ def gradient_check():
 
     # get the calculated delta values
     forward(W, b, v, h, f_input=x)
-    cost, cost_Y, cost_Z, delta_W, delta_b, delta_Y, delta_Z, max_u, delta_b_backprop = backward(Y, Z, W, b, u, u_t, p, p_t, beta, beta_t, v, h, mean_c, t_input=t)
+    cost, cost_Y, cost_Z, delta_W, delta_b, delta_Y, delta_Z, max_u, delta_b_backprop, mean_c, c = backward(Y, Z, W, b, u, u_t, p, p_t, beta, beta_t, v, h, mean_c, c, t_input=t)
 
     # decrease and increase weights slightly, compare with delta values
     numerical_delta_W = [0] + [ torch.from_numpy(np.zeros(W[i].shape)).type(dtype) for i in range(1, n_layers) ]
@@ -515,8 +526,9 @@ def create_dynamic_variables(symmetric_weights=False):
     beta   = [0] + [ torch.from_numpy(np.zeros(n_units[i])).type(dtype) for i in range(1, n_layers) ]
     beta_t = [0] + [ torch.from_numpy(np.zeros(n_units[i])).type(dtype) for i in range(1, n_layers) ]
     mean_c = [0] + [ torch.from_numpy(np.zeros((n_units[i], 1))).type(dtype) for i in range(1, n_layers-1) ]
+    c      = [0] + [ torch.from_numpy(np.zeros((n_units[i], 1))).type(dtype) for i in range(1, n_layers-1) ]
 
-    return W, b, Y, Z, v, h, u, u_t, p, p_t, beta, beta_t, mean_c
+    return W, b, Y, Z, v, h, u, u_t, p, p_t, beta, beta_t, mean_c, c
 
 def load_dynamic_variables(path):
     state = torch.load(os.path.join(path, "state.dat"))

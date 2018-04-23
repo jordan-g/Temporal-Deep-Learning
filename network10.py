@@ -86,11 +86,11 @@ def backward(Y, Z, W, b, u, u_t, p, p_t, beta, beta_t, v, h, mean_c, t_input):
             mean_c[i] = 0.5*mean_c[i] + 0.5*c
 
             if i == n_layers-2:
-                u[i]   = Y[i].transpose(0, 1).mm(beta[i+1]*output_burst_prob*relu_deriv(beta[i+1]))
-                u_t[i] = Y[i].transpose(0, 1).mm(beta_t[i+1]*output_burst_prob*relu_deriv(beta_t[i+1]))
+                u[i]   = Y[i].mm(beta[i+1]*output_burst_prob*relu_deriv(beta[i+1]))
+                u_t[i] = Y[i].mm(beta_t[i+1]*output_burst_prob*relu_deriv(beta_t[i+1]))
             else:
-                u[i]   = Y[i].transpose(0, 1).mm(p[i+1]*softplus_deriv(v[i+1]))
-                u_t[i] = Y[i].transpose(0, 1).mm(p_t[i+1]*softplus_deriv(v[i+1]))
+                u[i]   = Y[i].mm(p[i+1]*softplus_deriv(v[i+1]))
+                u_t[i] = Y[i].mm(p_t[i+1]*softplus_deriv(v[i+1]))
 
             max_u[i] = torch.sum(torch.abs(Y[i]), dim=1).unsqueeze(1)/mean_c[i]
 
