@@ -81,7 +81,7 @@ def backward(Y, Z, W, b, u, u_t, p, p_t, beta, beta_t, v, h, mean_c, t_input):
 
             delta_b_backprop[i] = -(beta_t[i] - beta[i])*output_burst_prob*relu_deriv(h[i])
         else:
-            c = Z[i].mm(h[i])
+            c = 1 + Z[i].mm(h[i])
 
             mean_c[i] = 0.5*mean_c[i] + 0.5*c
 
@@ -146,7 +146,7 @@ def train(folder_prefix=None, continuing_folder=None):
         Z_std_string   = " ".join([ str(i) for i in Z_std[1:] ])
         Y_std_string   = " ".join([ str(i) for i in Y_std[1:] ])
 
-        folder = "Tensorboard/" + "{} - {} - {} - {} - {} - {} - {} - {} - {} - {} - {} - {} - ".format(folder_prefix, str(ref), n_units_string, f_etas_string, b_etas_string, r_etas_string, W_std_string, Z_std_string, Y_std_string, output_burst_prob, min_Z, u_range) + info
+        folder = "Tensorboard/" + "{} - {} - {} - {} - {} - {} - {} - {} - {} - {} - {} - {} - ".format(folder_prefix, str(ref), n_units_string, f_etas_string, b_etas_string, r_etas_string, W_std_string, Z_std_string, Y_std_string, output_burst_prob, min_Z, u_range) + info + "_+1"
     else:
         folder = None
 
