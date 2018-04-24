@@ -538,8 +538,9 @@ def create_dynamic_variables(symmetric_weights=False):
     beta   = [0] + [ torch.from_numpy(np.zeros(n_units[i])).type(dtype) for i in range(1, n_layers) ]
     beta_t = [0] + [ torch.from_numpy(np.zeros(n_units[i])).type(dtype) for i in range(1, n_layers) ]
     mean_c = [0] + [ torch.from_numpy(np.zeros((n_units[i], 1))).type(dtype) for i in range(1, n_layers-1) ]
+    c      = [0] + [ torch.from_numpy(np.zeros((n_units[i], 1))).type(dtype) for i in range(1, n_layers-1) ]
 
-    return W, b, Y, Z, v, h, u, u_t, p, p_t, beta, beta_t, mean_c
+    return W, b, Y, Z, v, h, u, u_t, p, p_t, beta, beta_t, mean_c, c
 
 def load_dynamic_variables(path):
     state = torch.load(os.path.join(path, "state.dat"))
