@@ -56,9 +56,10 @@ def sigmoid(x):
 
 def hard_deriv(x, mean, variance):
     y = torch.zeros_like(x)
-    z = torch.ones_like(x)
+    
+    y[torch.le(x, mean+variance)*torch.ge(x, mean-variance)] = 1
 
-    return torch.where(torch.le(x, mean+variance)*torch.ge(x, mean-variance), z, y)
+    return y
 
 def relu(x, baseline=0):
     return torch.nn.functional.relu(Variable(x)).data
