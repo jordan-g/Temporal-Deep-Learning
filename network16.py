@@ -98,8 +98,8 @@ def backward(Y, Z, W, b, u, u_t, p, p_t, beta, beta_t, v, h, mean_c, c, t_input)
                 u[i]   = Y[i].mm(beta[i+1]*output_burst_prob*relu_deriv(beta[i+1]))/c[i]
                 u_t[i] = Y[i].mm(beta_t[i+1]*output_burst_prob*relu_deriv(beta[i+1]))/c[i]
             else:
-                u[i]   = Y[i].mm(p[i+1]*h[i+1]*hard_deriv(beta[i+1], mean=hard_m, variance=hard_v))/c[i]
-                u_t[i] = Y[i].mm(p_t[i+1]*h[i+1]*hard_deriv(beta[i+1], mean=hard_m, variance=hard_v))/c[i]
+                u[i]   = Y[i].mm(beta[i+1]*hard_deriv(beta[i+1], mean=hard_m, variance=hard_v))/c[i]
+                u_t[i] = Y[i].mm(beta_t[i+1]*hard_deriv(beta[i+1], mean=hard_m, variance=hard_v))/c[i]
 
             max_u[i] = torch.sum(torch.abs(Y[i]), dim=1).unsqueeze(1)/mean_c[i]
 
@@ -113,7 +113,7 @@ def backward(Y, Z, W, b, u, u_t, p, p_t, beta, beta_t, v, h, mean_c, c, t_input)
             cost_Z[i] = 0.5*torch.sum((min_Z - u[i])**2)
             cost_Y[i] = 0.5*torch.sum((u_range - max_u[i])**2)
 
-            e          = -(p_t[i] - p[i])*softplus_deriv(v[i])
+            e          = -(beta_t[i] - beta[i])*hard_deriv(beta[i], mean=hard_m, variance=hard_v)
             delta_W[i] = e.mm(h[i-1].transpose(0, 1))
             delta_b[i] = e
 
