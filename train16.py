@@ -22,6 +22,8 @@ parser.add_argument("-dynamic_plot",type=bool, help="Dynamic Plot",default=False
 parser.add_argument("-tensorB",type=bool, help="Tensorboard",default=True)
 parser.add_argument("-use_comet",type=bool, help="Use Comet",default=False)
 parser.add_argument("-info",type=str, help="Information",default="Normal")
+parser.add_argument("-hard_m",type=float, help="Hard derivative mean",default=0.5)
+parser.add_argument("-hard_v",type=float, help="Hard derivative variance",default=0.25)
 args=parser.parse_args()
 
 
@@ -74,6 +76,9 @@ elif tmp == "Baseline_Fixed_RFW_Sigmoid_Learn_Recur_Exp_deriv":
 elif tmp == "Baseline_Fixed_RFW_Sigmoid_Learn_Recur_Exp_activation_deriv":
 	import network15 as net
 	net.ref = 15
+elif tmp == "Baseline_Fixed_RFW_Sigmoid_Learn_Recur_Sigmoid_activation_Hard_deriv":
+	import network16 as net
+	net.ref = 16
 else:
 	raise ValueError("Unknown parameter")
 
@@ -98,5 +103,7 @@ net.dynamic_plot      = args.dynamic_plot
 net.TensorB           = args.tensorB
 net.use_comet         = args.use_comet
 net.info              = args.info
+net.hard_m            = args.hard_m 
+net.hard_v            = args.hard_v 
 
 net.train(folder_prefix=folder_prefix)
