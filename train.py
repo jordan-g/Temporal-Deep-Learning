@@ -80,6 +80,12 @@ elif tmp == "network18":
 elif tmp == "network19":
 	import network19 as net
 	net.ref = 19
+elif tmp == "network20":
+	import network20 as net
+	net.ref = 20
+elif tmp == "network21":
+	import network21 as net
+	net.ref = 21
 else:
 	raise ValueError("Unknown parameter")
 
