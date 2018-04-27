@@ -336,7 +336,7 @@ def train(folder_prefix=None, continuing_folder=None):
 
                     # update the train error
                     if predicted_class != target_class:
-                        train_error += 1
+                        train_error += 1.0/target_on_time
 
                     target = t
                 else:
@@ -347,18 +347,20 @@ def train(folder_prefix=None, continuing_folder=None):
 
                 cost, cost_Y, cost_Z, delta_W, delta_b, delta_Y, delta_Z, max_u, delta_b_backprop, mean_c, c = backward(Y, Z, W, b, u, p, beta, v, h, mean_c, c, target, beta_prev, h_prev)
                 
-                avg_costs           += cost[1:]
-                avg_Y_costs         += cost_Y[1:]
-                avg_Z_costs         += cost_Z[1:]
-                avg_backprop_angles += [(180/np.pi)*np.arccos(np.clip(delta_b_backprop[i].squeeze().dot(delta_b[i].squeeze())/(1e-10 + torch.norm(delta_b_backprop[i])*torch.norm(delta_b[i])),-1,1)) for i in range(1, n_layers-1)]
-                min_us              += [ torch.min(u[i]) for i in range(1, n_layers-1) ]
-                max_us              += [ torch.max(u[i]) for i in range(1, n_layers-1) ]
-                min_hs              += [ torch.min(h[i]) for i in range(1, n_layers) ]
-                max_hs              += [ torch.max(h[i]) for i in range(1, n_layers) ]
-                avg_cs              += [ torch.mean(c[i]) for i in range(1, n_layers-1) ]
-                avg_std_cs          += [ torch.std(c[i]) for i in range(1, n_layers-1) ]
-                avg_W_std           += [ torch.std(W[i]) for i in range(1, n_layers) ]
-                avg_W_mean          += [ torch.mean(W[i]) for i in range(1, n_layers) ]
+                for i in target_layers:
+                    avg_costs[i-1]      += cost[i]
+                    if i < n_layers-1:
+                        avg_Y_costs[i-1]    += cost_Y[i]
+                        avg_Z_costs[i-1]    += cost_Z[i]
+                        avg_backprop_angles[i-1] += (180/np.pi)*np.arccos(np.clip(delta_b_backprop[i].squeeze().dot(delta_b[i].squeeze())/(1e-10 + torch.norm(delta_b_backprop[i])*torch.norm(delta_b[i])),-1,1))
+                        min_us[i-1]              += torch.min(u[i])
+                        max_us[i-1]              += torch.max(u[i])
+                        avg_cs[i-1]              += torch.mean(c[i])
+                        avg_std_cs[i-1]          += torch.std(c[i])
+                    min_hs[i-1]              += torch.min(h[i])
+                    max_hs[i-1]              += torch.max(h[i])
+                    avg_W_std[i-1]           += torch.std(W[i])
+                    avg_W_mean[i-1]          += torch.mean(W[i])
 
                 if timestep > 0:
                     update_weights(W, b, Y, Z, delta_W, delta_b, delta_Y, delta_Z, target_layers)
