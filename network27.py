@@ -109,9 +109,9 @@ def backward(Y, Z, W, b, u, p, beta, v, h, mean_c, c, t_input, beta_prev, h_prev
             mean_c[i] = 0.5*mean_c[i] + 0.5*c[i]
 
             if i == n_layers-2:
-                u[i]   = Y[i].mm(beta_prev[i+1]*output_burst_prob*relu_deriv(beta_prev[i+1])) - c[i]
+                u[i]   = Y[i].mm(beta_prev[i+1]*output_burst_prob*relu_deriv(beta_prev[i+1]))
             else:
-                u[i]   = Y[i].mm(beta_prev[i+1]*hard_deriv(beta_prev[i+1], mean=hard_m, variancel=hard_vl, varianceh=hard_vh)) - c[i]
+                u[i]   = Y[i].mm(beta_prev[i+1]*hard_deriv(beta_prev[i+1], mean=hard_m, variancel=hard_vl, varianceh=hard_vh))
 
             max_u[i] = torch.sum(torch.abs(Y[i]), dim=1).unsqueeze(1)/mean_c[i]
 

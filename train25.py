@@ -26,8 +26,8 @@ parser.add_argument("-hard_m",type=float, help="Hard derivative mean",default=0.
 parser.add_argument("-hard_vl",type=float, help="Hard derivative variance Low",default=4.)
 parser.add_argument("-hard_vh",type=float, help="Hard derivative variance High",default=4.)
 parser.add_argument("-target_onsets", help="Onset times of target",type=lambda s: np.array([float(item) for item in s.split(',')]), default=np.array([2]))
-parser.add_argument("-target_on_time", type=float, help="Number of timesteps to show the target",default=1)
-parser.add_argument("-time_per_example", type=float, help="Number of timesteps to show each example",default=4)
+parser.add_argument("-target_on_time", type=int, help="Number of timesteps to show the target",default=1)
+parser.add_argument("-time_per_example", type=int, help="Number of timesteps to show each example",default=4)
 args=parser.parse_args()
 
 
@@ -89,6 +89,18 @@ elif tmp == "Baseline_Fixed_RFW_Sigmoid_Learn_Recur_SoftPlus_activation_Hard_der
 elif tmp == "network25":
 	import network25 as net
 	net.ref = 25
+elif tmp == "network26":
+	import network26 as net
+	net.ref = 26
+elif tmp == "network27":
+	import network27 as net
+	net.ref = 27
+elif tmp == "network28":
+	import network28 as net
+	net.ref = 28
+elif tmp == "network29":
+	import network29 as net
+	net.ref = 29
 else:
 	raise ValueError("Unknown parameter")
 

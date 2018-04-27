@@ -109,9 +109,9 @@ def backward(Y, Z, W, b, u, p, beta, v, h, mean_c, c, t_input, beta_prev, h_prev
             mean_c[i] = 0.5*mean_c[i] + 0.5*c[i]
 
             if i == n_layers-2:
-                u[i]   = Y[i].mm(beta_prev[i+1]*output_burst_prob*relu_deriv(beta_prev[i+1])) - c[i]
+                u[i]   = Y[i].mm(beta_prev[i+1]*output_burst_prob*relu_deriv(beta_prev[i+1]))
             else:
-                u[i]   = Y[i].mm(beta_prev[i+1]*hard_deriv(beta_prev[i+1], mean=hard_m, variancel=hard_vl, varianceh=hard_vh)) - c[i]
+                u[i]   = Y[i].mm(beta_prev[i+1]*hard_deriv(beta_prev[i+1], mean=hard_m, variancel=hard_vl, varianceh=hard_vh))
 
             max_u[i] = torch.sum(torch.abs(Y[i]), dim=1).unsqueeze(1)/mean_c[i]
 
@@ -144,6 +144,8 @@ def update_weights(W, b, Y, Z, delta_W, delta_b, delta_Y, delta_Z, target_layers
         if i < n_layers-1:
             Y[i] -= b_etas[i]*delta_Y[i]
             Z[i] -= r_etas[i]*delta_Z[i]
+            Y[i][Y[i] < 0] = 0
+            Z[i][Z[i] < 0] = 0
 
 def train(folder_prefix=None, continuing_folder=None):
     # pdb.set_trace()
@@ -336,7 +338,7 @@ def train(folder_prefix=None, continuing_folder=None):
 
                     # update the train error
                     if predicted_class != target_class:
-                        train_error += 1
+                        train_error += 1/target_on_time
 
                     target = t
                 else:
@@ -541,6 +543,10 @@ def create_dynamic_variables(symmetric_weights=False):
     beta_prev = [0] + [ torch.from_numpy(np.zeros((n_units[i], 1))).type(dtype) for i in range(1, n_layers) ]
     mean_c    = [0] + [ torch.from_numpy(np.zeros((n_units[i], 1))).type(dtype) for i in range(1, n_layers-1) ]
     c         = [0] + [ torch.from_numpy(np.zeros((n_units[i], 1))).type(dtype) for i in range(1, n_layers-1) ]
+
+    for i in range(1, n_layers-1):
+        Y[i][Y[i] < 0] = 0
+        Z[i][Z[i] < 0] = 0
 
     return W, b, Y, Z, v, h, u, p, beta, mean_c, c, h_prev, beta_prev
 
