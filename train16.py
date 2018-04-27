@@ -79,6 +79,15 @@ elif tmp == "Baseline_Fixed_RFW_Sigmoid_Learn_Recur_Exp_activation_deriv":
 elif tmp == "Baseline_Fixed_RFW_Sigmoid_Learn_Recur_Sigmoid_activation_Hard_deriv":
 	import network16 as net
 	net.ref = 16
+elif tmp == "network22":
+	import network22 as net
+	net.ref = 22
+elif tmp == "network23":
+	import network23 as net
+	net.ref = 23
+elif tmp == "network24":
+	import network24 as net
+	net.ref = 24
 else:
 	raise ValueError("Unknown parameter")
 
