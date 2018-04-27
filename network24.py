@@ -118,7 +118,7 @@ def backward(Y, Z, W, b, u, u_t, p, p_t, beta, beta_t, v, h, mean_c, c, t_input)
             delta_W[i] = e.mm(h[i-1].transpose(0, 1))
             delta_b[i] = e
 
-            delta_b_backprop[i] = W[i+1].transpose(0, 1).mm(delta_b_backprop[i+1])*softplus_deriv(v[i])
+            delta_b_backprop[i] = W[i+1].transpose(0, 1).mm(delta_b_backprop[i+1])*h[i]*(1.0 - h[i])
 
             e_Y = -(u_range - max_u[i])/mean_c[i]
             delta_Y[i] = torch.sign(Y[i]).transpose(0, 1).mm(e_Y).transpose(0, 1)
