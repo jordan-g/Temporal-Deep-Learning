@@ -93,8 +93,8 @@ def backward(Y, Z, W, b, u, p, beta, v, h, mean_c, c, t_input, beta_prev, h_prev
     for i in range(n_layers-1, 0, -1):
         if i == n_layers-1:
             if t_input is not None:
-                # beta[i] = output_burst_prob*(0.9*t_input.unsqueeze(1) + 0.1*h[i])
-                beta[i] = output_burst_prob*t_input.unsqueeze(1)
+                beta[i] = output_burst_prob*(0.5*t_input.unsqueeze(1) + 0.5*h[i])
+                # beta[i] = output_burst_prob*t_input.unsqueeze(1)
             else:
                 beta[i] = output_burst_prob*h[i]
 
