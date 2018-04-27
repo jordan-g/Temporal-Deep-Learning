@@ -390,6 +390,7 @@ def train(folder_prefix=None, continuing_folder=None):
                 avg_W_std = [avg_W_std[i]/(store*time_per_example) for i in range(n_layers-1)]
                 avg_W_mean = [avg_W_mean[i]/(store*time_per_example) for i in range(n_layers-1)]
                 us = u[-2]
+                train_error = train_error/store
                 
                 where = (abs_ex_num+1)//store
                 if use_comet:
