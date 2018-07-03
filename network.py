@@ -6,18 +6,14 @@ import matplotlib.pyplot as plt
 from scipy.special import expit
 
 import utils
-from plotter import Plotter, SigmoidLimitsPlotter
 import os
 import datetime
 import torch
 from torch.autograd import Variable
-from comet_ml import Experiment
 import time
-import misc
 import json
 import shutil
 import pdb
-from tensorboardX import SummaryWriter
 
 # use CUDA if it is available
 cuda = torch.cuda.is_available()
@@ -143,6 +139,9 @@ def update_weights(W, b, Y, Z, delta_W, delta_b, delta_Y, delta_Z):
             Y[i] -= b_etas[i]*delta_Y[i]
 
 def train(folder_prefix=None, continuing_folder=None):
+    if use_tensorboard:
+        from tensorboardX import SummaryWriter
+
     if folder_prefix is not None:
         # generate a name for the folder where data will be stored
         n_units_string = " ".join([ str(i) for i in n_units[1:] ])
@@ -152,7 +151,7 @@ def train(folder_prefix=None, continuing_folder=None):
         W_range_string = " ".join([ str(i) for i in W_range[1:] ])
         Z_range_string = " ".join([ str(i) for i in Z_range[1:] ])
         Y_range_string = " ".join([ str(i) for i in Y_range[1:] ])
-        folder         = "Tensorboard/" + "{} - {} - {} - {} - {} - {} - {} - {} - {} - {} - {} - {} - {}".format(folder_prefix, n_units_string, f_etas_string, b_etas_string, r_etas_string, W_range_string, Z_range_string, Y_range_string, output_burst_prob, desired_u, hard_m, hard_v) + " - {}".format(info)*(info != "")
+        folder         = "Tensorboard/" + "{} - {} - {} - {} - {} - {} - {} - {} - {} - {} - {} - {}".format(folder_prefix, n_units_string, f_etas_string, b_etas_string, r_etas_string, W_range_string, Z_range_string, Y_range_string, output_burst_prob, desired_u, hard_m, hard_v) + " - {}".format(info)*(info != "")
     else:
         folder = None
 
@@ -363,10 +362,10 @@ def train(folder_prefix=None, continuing_folder=None):
                     writer.add_scalar('cs_mean_std_h', avg_std_cs[-1], step)
                     writer.add_scalar('cs_std_h', std_cs[-1], step)
                     writer.add_scalar('us_h_0', us[0], step)
+                    writer.add_scalar('us_h_1', us[1], step)
 
                 # print test error
                 print("Epoch {}, ex {}. Test Error: {}%. Test Cost: {}. Train Cost: {}.".format(epoch_num+1, example_num+1, errors, test_costs, avg_costs[-1]))
-                    writer.add_scalar('us_h_1', us[1], step)
 
                 # print some other variables
                 for i in range(n_layers-1):
