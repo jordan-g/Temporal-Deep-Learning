@@ -288,9 +288,6 @@ def train(folder_prefix=None, continuing_folder=None):
         save_dynamic_variables(folder, W, b, Y, Z, mean_c)
         save_results(folder, avg_costs, avg_backprop_angles, [errors], [test_costs], avg_Y_costs, avg_Z_costs, us)
 
-    # number of timesteps per example
-    timesteps_per_example = 4 + n_layers
-
     h_prev[0] = torch.from_numpy(np.zeros((x_set.shape[0], 1))).type(dtype)
 
     for epoch_num in range(n_epochs):
@@ -307,15 +304,14 @@ def train(folder_prefix=None, continuing_folder=None):
             x = x_set[:, example_index]
             t = t_set[:, example_index]
 
-            l_off = 3
-            l_on = 2
-            t_on = np.random.choice(np.arange(l_off, timesteps_per_example-l_on+1))
+            no_target_length   = n_layers   # number of timesteps where no target can be presented (allows a full forward pass to occur)
+            target_on_timestep = np.random.choice(np.arange(no_target_length, timesteps_per_example))
 
             for timestep in range(timesteps_per_example):
                 # do a forward pass
                 forward(W, b, v, h, h_prev, f_input=x)
 
-                if timestep == t_on:
+                if timestep == target_on_timestep:
                     # get the predicted & target class
                     predicted_class = int(torch.max(h_prev[-1], 0)[1])
                     target_class    = int(torch.max(t, 0)[1])
@@ -324,7 +320,7 @@ def train(folder_prefix=None, continuing_folder=None):
                     if predicted_class != target_class:
                         train_error += 1
 
-                if t_on <= timestep < t_on + l_on:
+                if timestep == target_on_timestep:
                     target = t
                 else:
                     target = None
@@ -354,8 +350,8 @@ def train(folder_prefix=None, continuing_folder=None):
                     us = u[-2]
                     save_results(folder, avg_costs, avg_backprop_angles, [errors], [test_costs], avg_Y_costs, avg_Z_costs, us.cpu().numpy())
 
-                if t_on <= timestep < t_on + n_layers-1:
-                    layer_num = max(0, n_layers-(timestep-t_on)-1)
+                if target_on_timestep <= timestep < target_on_timestep + (n_layers - 1):
+                    layer_num = max(0, n_layers - (timestep - target_on_timestep) - 1)
                     
                     # print("Example {}, t = {}. Updating weights for layer {}.".format(example_num, timestep, layer_num))
                     

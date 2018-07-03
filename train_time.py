@@ -20,27 +20,29 @@ parser.add_argument("-desired_u", type=float, help="Desired apical potential", d
 parser.add_argument("-use_tensorboard", type=bool, help="Whether to use Tensorboard", default=True)
 parser.add_argument("-hard_m", type=float, help="Hard derivative mean", default=0.2)
 parser.add_argument("-hard_v", type=float, help="Hard derivative variance", default=0.3)
+parser.add_argument("-timesteps_per_example", type=float, help="Number of timesteps per training example", default=10)
 parser.add_argument("-info", type=str, help="Any other information about the experiment", default="")
 args=parser.parse_args()
 
 # set network parameters
 import network_time as net
-net.n_epochs          = args.n_epochs
-net.store             = args.store
-net.n_layers          = args.n_layers
-net.n_units           = args.n_units
-net.W_range           = args.W_range
-net.Z_range           = args.Z_range
-net.Y_range           = args.Y_range
-net.f_etas            = args.f_etas
-net.r_etas            = args.r_etas
-net.b_etas            = args.b_etas
-net.output_burst_prob = args.output_burst_prob
-net.desired_u         = args.desired_u
-net.use_tensorboard   = args.use_tensorboard
-net.hard_m            = args.hard_m 
-net.hard_v            = args.hard_v 
-net.info              = args.info
+net.n_epochs              = args.n_epochs
+net.store                 = args.store
+net.n_layers              = args.n_layers
+net.n_units               = args.n_units
+net.W_range               = args.W_range
+net.Z_range               = args.Z_range
+net.Y_range               = args.Y_range
+net.f_etas                = args.f_etas
+net.r_etas                = args.r_etas
+net.b_etas                = args.b_etas
+net.output_burst_prob     = args.output_burst_prob
+net.desired_u             = args.desired_u
+net.use_tensorboard       = args.use_tensorboard
+net.hard_m                = args.hard_m
+net.hard_v                = args.hard_v
+net.timesteps_per_example = args.timesteps_per_example
+net.info                  = args.info
 
 # train the network
 net.train(folder_prefix=args.folder_prefix)
