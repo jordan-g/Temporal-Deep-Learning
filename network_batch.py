@@ -382,32 +382,22 @@ def train(folder_prefix=None, continuing_folder=None):
 def test(W, b):
     v = [0] + [ torch.from_numpy(np.zeros((n_units[i], 1))).type(dtype) for i in range(1, n_layers) ]
     h = [0] + [ torch.from_numpy(np.zeros((n_units[i], 1))).type(dtype) for i in range(1, n_layers) ]
+    
+    x = x_test_set[:, :n_test_examples]
+    t = t_test_set[:, :n_test_examples]
+    
+    # do a forward pass
+    forward(W, b, v, h, f_input=x)
+    
+    beta   = output_burst_prob*h[-1]
+    beta_t = output_burst_prob*t
+    cost   = 0.5*torch.sum((beta_t - beta)**2)
+    
+    # get the predicted & target classes
+    predicted_classes = torch.max(h[-1], 0)[1]
+    target_classes    = torch.max(t, 0)[1]
 
-    # initialize error
-    error = 0
-    cost  = 0
-    for i in range(n_test_examples):
-        # get input and target for this test example
-        x = x_test_set[:, i].unsqueeze(1)
-        t = t_test_set[:, i].unsqueeze(1)
-
-        # do a forward pass
-        forward(W, b, v, h, f_input=x)
-
-        # compute cost
-        beta   = output_burst_prob*h[-1]
-        beta_t = output_burst_prob*t
-        cost  += 0.5*torch.sum((beta_t - beta)**2)
-
-        # get the predicted & target class
-        predicted_class = int(torch.max(h[-1], 0)[1])
-        target_class    = int(torch.max(t, 0)[1])
-
-        # update the test error
-        if predicted_class != target_class:
-            error += 1
-
-    cost /= n_test_examples
+    error = int(torch.sum(torch.ne(predicted_classes, target_classes)))
 
     return 100.0*error/n_test_examples, cost
 
