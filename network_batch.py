@@ -90,10 +90,12 @@ def backward(Y, Z, W, b, u, u_t, p, p_t, beta, beta_t, v, h, mean_c, c, t_input)
             # compute feedforward weight update
             e          = -(beta_t[i] - beta[i])*output_burst_prob*relu_deriv(h[i])
             delta_W[i] = e.mm(h[i-1].transpose(0, 1))
-            delta_b[i] = torch.sum(e, dim=1)
+            delta_b[i] = torch.sum(e, dim=1).unsqueeze(1)
+            
+            # pdb.set_trace()
 
             # compute backprop-prescribed weight update
-            delta_b_backprop[i] = -(beta_t[i] - beta[i])*output_burst_prob*relu_deriv(h[i])
+            delta_b_backprop[i] = torch.sum(-(beta_t[i] - beta[i])*output_burst_prob*relu_deriv(h[i]), dim=1).unsqueeze(1)
         else:
             c[i] = Z[i].mm(h[i])
 
@@ -122,13 +124,14 @@ def backward(Y, Z, W, b, u, u_t, p, p_t, beta, beta_t, v, h, mean_c, c, t_input)
             # compute feedforward weight update
             e          = -(beta_t[i] - beta[i])*hard_deriv(beta[i], mean=hard_m, variance=hard_v)
             delta_W[i] = e.mm(h[i-1].transpose(0, 1))
-            delta_b[i] = torch.sum(e, dim=1)
+            delta_b[i] = torch.sum(e, dim=1).unsqueeze(1)
 
             # compute backprop-prescribed weight update
-            delta_b_backprop[i] = W[i+1].transpose(0, 1).mm(delta_b_backprop[i+1])*h[i]*(1.0 - h[i])
+            delta_b_backprop[i] = torch.sum(W[i+1].transpose(0, 1).mm(delta_b_backprop[i+1])*h[i]*(1.0 - h[i]), dim=1).unsqueeze(1)
 
 def update_weights(W, b, Y, Z, delta_W, delta_b, delta_Y, delta_Z):
     for i in range(1, n_layers):
+        # pdb.set_trace()
         # update feedforward weights
         W[i] -= f_etas[i]*delta_W[i]
         b[i] -= f_etas[i]*delta_b[i]
@@ -249,7 +252,7 @@ def train(folder_prefix=None, continuing_folder=None):
     train_error         = 0
     avg_W_range         = np.zeros(n_layers-1)
     avg_W_mean          = np.zeros(n_layers-1)
-    us                  = np.zeros(500)
+    us                  = np.zeros(n_units[-2])
 
     # make a list of training example indices
     example_indices = np.arange(n_examples)
@@ -290,83 +293,69 @@ def train(folder_prefix=None, continuing_folder=None):
             predicted_classes = torch.max(h[-1], 0)[1]
             target_classes    = torch.max(t, 0)[1]
 
-            train_error += int(torch.sum(torch.ne(predicted_classes, target_classes)))
+            train_error = int(torch.sum(torch.ne(predicted_classes, target_classes)))
 
             # do a backward pass
             backward(Y, Z, W, b, u, u_t, p, p_t, beta, beta_t, v, h, mean_c, c, t_input=t)
 
-            # # record variables
-            # avg_costs           += cost[1:]
-            # avg_Y_costs         += cost_Y[1:]
-            # avg_Z_costs         += cost_Z[1:]
-            # avg_backprop_angles += [(180/np.pi)*np.arccos(np.clip(delta_b_backprop[i].squeeze().dot(delta_b[i].squeeze())/(1e-10 + torch.norm(delta_b_backprop[i])*torch.norm(delta_b[i])),-1,1)) for i in range(1, n_layers-1)]
-            # min_us              += [ torch.min(u[i]) for i in range(1, n_layers-1) ]
-            # max_us              += [ torch.max(u[i]) for i in range(1, n_layers-1) ]
-            # min_hs              += [ torch.min(h[i]) for i in range(1, n_layers) ]
-            # max_hs              += [ torch.max(h[i]) for i in range(1, n_layers) ]
-            # avg_cs              += [ torch.mean(c[i]) for i in range(1, n_layers-1) ]
-            # avg_std_cs          += [ torch.std(c[i]) for i in range(1, n_layers-1) ]
-            # avg_W_range         += [ torch.std(W[i]) for i in range(1, n_layers) ]
-            # avg_W_mean          += [ torch.mean(W[i]) for i in range(1, n_layers) ]
+            # record variables
+            avg_costs           = cost[1:]
+            avg_Y_costs         = cost_Y[1:]
+            avg_Z_costs         = cost_Z[1:]
+            avg_backprop_angles = [(180/np.pi)*np.arccos(np.clip(delta_b_backprop[i].squeeze().dot(delta_b[i].squeeze())/(1e-10 + torch.norm(delta_b_backprop[i])*torch.norm(delta_b[i])),-1,1)) for i in range(1, n_layers-1)]
+            min_us              = [ torch.min(u[i]) for i in range(1, n_layers-1) ]
+            max_us              = [ torch.max(u[i]) for i in range(1, n_layers-1) ]
+            min_hs              = [ torch.min(h[i]) for i in range(1, n_layers) ]
+            max_hs              = [ torch.max(h[i]) for i in range(1, n_layers) ]
+            avg_cs              = [ torch.mean(c[i]) for i in range(1, n_layers-1) ]
+            avg_std_cs          = [ torch.std(c[i]) for i in range(1, n_layers-1) ]
+            avg_W_range         = [ torch.std(W[i]) for i in range(1, n_layers) ]
+            avg_W_mean          = [ torch.mean(W[i]) for i in range(1, n_layers) ]
 
-            # if example_num == 0 and epoch_num == 0 and folder is not None:
-            #     # save variables
-            #     us = u[-2]
-            #     save_results(folder, avg_costs, avg_backprop_angles, [errors], [test_costs], avg_Y_costs, avg_Z_costs, us.cpu().numpy())
+            if batch_num == 0 and epoch_num == 0 and folder is not None:
+                # save variables
+                us = torch.mean(u[-2], dim=1)
+                save_results(folder, avg_costs, avg_backprop_angles, [errors], [test_costs], avg_Y_costs, avg_Z_costs, us.cpu().numpy())
 
             # update weights
             update_weights(W, b, Y, Z, delta_W, delta_b, delta_Y, delta_Z)
+            
+            # get test error
+            errors, test_costs = test(W, b)
 
-            # if (example_num+1) % store == 0:
-            if True:
-                # get test error
-                errors, test_costs = test(W, b)
-
-                # avg_costs           = [avg_costs[i]/(store+1) for i in range(n_layers-1)]
-                # avg_Y_costs         = [avg_Y_costs[i]/(store+1) for i in range(n_layers-2)]
-                # avg_Z_costs         = [avg_Z_costs[i]/(store+1) for i in range(n_layers-2)]
-                # avg_backprop_angles = [avg_backprop_angles[i]/(store+1) for i in range(n_layers-2)]
-                # min_us              = [min_us[i]/(store+1) for i in range(n_layers-2)]
-                # max_us              = [max_us[i]/(store+1) for i in range(n_layers-2)]
-                # min_hs              = [min_hs[i]/(store+1) for i in range(n_layers-1)]
-                # max_hs              = [max_hs[i]/(store+1) for i in range(n_layers-1)]
-                # avg_cs              = [avg_cs[i]/(store+1) for i in range(n_layers-2)]
-                # avg_std_cs          = [avg_std_cs[i]/(store+1) for i in range(n_layers-2)]
-                # std_cs              = [torch.std(c[i]) for i in range(1, n_layers-1)]
-                # avg_W_range         = [avg_W_range[i]/(store+1) for i in range(n_layers-1)]
-                # avg_W_mean          = [avg_W_mean[i]/(store+1) for i in range(n_layers-1)]
-                # us                  = u[-2]
+            std_cs              = [torch.std(c[i]) for i in range(1, n_layers-1)]
+            us                  = torch.mean(u[-2], dim=1)
                 
-                # step = (abs_ex_num+1)//store
+            step = (abs_batch_num+1)
 
-                # if use_tensorboard:
-                #     # write to Tensorboard
-                #     writer.add_scalar('1_errors', errors, step)
-                #     writer.add_scalar('2_train_error', train_error, step)
-                #     writer.add_scalar('3_test_costs', test_costs, step)
-                #     writer.add_scalar('4_avg_Y_costs', avg_Y_costs[-1], step)
-                #     writer.add_scalar('5_avg_Z_costs', avg_Z_costs[-1], step)
-                #     writer.add_scalar('6_avg_costs_o', avg_costs[-1], step)
-                #     writer.add_scalar('7_avg_costs_h', avg_costs[-2], step)
-                #     writer.add_scalar('8_avg_backprop_angles', avg_backprop_angles[-1], step)
-                #     writer.add_scalar('9_avg_W_range_o', avg_W_range[-1], step)
-                #     writer.add_scalar('10_avg_W_range_h', avg_W_range[-2], step)
-                #     writer.add_scalar('11_avg_W_mean_o', avg_W_mean[-1], step)
-                #     writer.add_scalar('12_avg_W_mean_h', avg_W_mean[-2], step)
-                #     writer.add_scalar('us_min_h', min_us[-1], step)
-                #     writer.add_scalar('us_max_h', max_us[-1], step)
-                #     writer.add_scalar('hs_min_o', min_hs[-1], step)
-                #     writer.add_scalar('hs_max_o', max_hs[-1], step)
-                #     writer.add_scalar('hs_min_h', min_hs[-2], step)
-                #     writer.add_scalar('hs_max_h', max_hs[-2], step)
-                #     writer.add_scalar('cs_mean_h', avg_cs[-1], step)
-                #     writer.add_scalar('cs_mean_std_h', avg_std_cs[-1], step)
-                #     writer.add_scalar('cs_std_h', std_cs[-1], step)
-                #     writer.add_scalar('us_h_0', us[0], step)
-                #     writer.add_scalar('us_h_1', us[1], step)
+            if use_tensorboard:
+                # write to Tensorboard
+                writer.add_scalar('1_errors', errors, step)
+                writer.add_scalar('2_train_error', train_error, step)
+                writer.add_scalar('3_test_costs', test_costs, step)
+                writer.add_scalar('4_avg_Y_costs', avg_Y_costs[-1], step)
+                writer.add_scalar('5_avg_Z_costs', avg_Z_costs[-1], step)
+                writer.add_scalar('6_avg_costs_o', avg_costs[-1], step)
+                writer.add_scalar('7_avg_costs_h', avg_costs[-2], step)
+                writer.add_scalar('8_avg_backprop_angles', avg_backprop_angles[-1], step)
+                writer.add_scalar('9_avg_W_range_o', avg_W_range[-1], step)
+                writer.add_scalar('10_avg_W_range_h', avg_W_range[-2], step)
+                writer.add_scalar('11_avg_W_mean_o', avg_W_mean[-1], step)
+                writer.add_scalar('12_avg_W_mean_h', avg_W_mean[-2], step)
+                writer.add_scalar('us_min_h', min_us[-1], step)
+                writer.add_scalar('us_max_h', max_us[-1], step)
+                writer.add_scalar('hs_min_o', min_hs[-1], step)
+                writer.add_scalar('hs_max_o', max_hs[-1], step)
+                writer.add_scalar('hs_min_h', min_hs[-2], step)
+                writer.add_scalar('hs_max_h', max_hs[-2], step)
+                writer.add_scalar('cs_mean_h', avg_cs[-1], step)
+                writer.add_scalar('cs_mean_std_h', avg_std_cs[-1], step)
+                writer.add_scalar('cs_std_h', std_cs[-1], step)
+                writer.add_scalar('us_h_0', us[0], step)
+                writer.add_scalar('us_h_1', us[1], step)
 
                 # print test error
-                print("Epoch {}, batch {}. Test Error: {}%. Test Cost: {}. Train Cost: {}.".format(epoch_num+1, batch_num+1, errors, test_costs, avg_costs[-1]))
+                print("Epoch {}, batch {}/{}. Test Error: {}%. Test Cost: {}. Train Cost: {}.".format(epoch_num+1, batch_num+1, n_batches, errors, test_costs, torch.mean(cost[-1])))
 
                 # print some other variables
                 for i in range(n_layers-1):
@@ -375,28 +364,10 @@ def train(folder_prefix=None, continuing_folder=None):
                     else:
                         print("Layer {}. h: {:.4f} to {:.4f}".format(i, min_hs[i], max_hs[i]))
 
-                # if folder is not None:
-                #     # save network state & recording arrays
-                #     save_dynamic_variables(folder, W, b, Y, Z, mean_c)
-                #     save_results(folder, avg_costs, avg_backprop_angles, [errors], [test_costs], avg_Y_costs, avg_Z_costs, us.cpu().numpy())
-
-                # # reset recording arrays
-                # avg_costs           = np.zeros(n_layers-1)
-                # avg_Y_costs         = np.zeros(n_layers-2)
-                # avg_Z_costs         = np.zeros(n_layers-2)
-                # test_costs          = 0
-                # avg_backprop_angles = np.zeros(n_layers-2)
-                # min_us              = np.zeros(n_layers-2)
-                # max_us              = np.zeros(n_layers-2)
-                # min_hs              = np.zeros(n_layers-1)
-                # max_hs              = np.zeros(n_layers-1)
-                # errors              = 0
-                # train_error         = 0
-                # avg_cs              = np.zeros(n_layers-2)
-                # avg_std_cs          = np.zeros(n_layers-2)
-                # std_cs              = np.zeros(n_layers-2)
-                # avg_W_range         = np.zeros(n_layers-1)
-                # avg_W_mean          = np.zeros(n_layers-1)
+                if folder is not None:
+                    # save network state & recording arrays
+                    save_dynamic_variables(folder, W, b, Y, Z, mean_c)
+                    save_results(folder, avg_costs, avg_backprop_angles, [errors], [test_costs], avg_Y_costs, avg_Z_costs, us.cpu().numpy())
 
         end_time = time.time()
         print("Elapsed time: {} s.".format(end_time - start_time))
