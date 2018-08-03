@@ -15,6 +15,7 @@ import json
 import shutil
 import pdb
 
+
 # use CUDA if it is available
 cuda = torch.cuda.is_available()
 if cuda:
@@ -355,7 +356,7 @@ def train(folder_prefix=None, continuing_folder=None):
                 writer.add_scalar('us_h_1', us[1], step)
 
                 # print test error
-                print("Epoch {}, batch {}/{}. Test Error: {}%. Test Cost: {}. Train Cost: {}.".format(epoch_num+1, batch_num+1, n_batches, errors, test_costs, torch.mean(cost[-1])))
+                print("Epoch {}, batch {}/{}. Test Error: {}%. Test Cost: {}. Train Cost: {}.".format(epoch_num+1, batch_num+1, n_batches, errors, test_costs, cost[-1]))
 
                 # print some other variables
                 for i in range(n_layers-1):
@@ -486,3 +487,4 @@ def save_results(path, avg_costs, avg_backprop_angles, errors, test_costs, avg_Y
     f=open(os.path.join(path, "us.csv"),'a')
     np.savetxt(f, us, delimiter=" ", fmt='%.5f')
     f.close()
+
