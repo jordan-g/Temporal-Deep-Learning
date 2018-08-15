@@ -193,6 +193,7 @@ def train(folder_prefix=None, continuing_folder=None):
             f.write("Desired apical potential: {}\n".format(desired_u))
             f.write("Hard derivative mean: {}\n".format(hard_m))
             f.write("Hard derivative variance: {}\n".format(hard_v))
+            f.write("Batch size: {}\n".format(batch_size))
             f.write("Other info: {}\n".format(info))
         filename = os.path.basename(__file__)
         if filename.endswith('pyc'):
@@ -218,9 +219,27 @@ def train(folder_prefix=None, continuing_folder=None):
                        'desired_u'        : desired_u,
                        'hard_m'           : hard_m,
                        'hard_v'           : hard_v,
+                       'batch_size'       : batch_size,
                        'info'             : info}
         with open(os.path.join(folder, "params.json"), 'w') as f:
             json.dump(params_dict, f)
+
+        results_csv_filename = os.path.join(folder, "results.csv")
+
+        # generate a name for the folder where data will be stored
+        n_units_string = "-".join([ str(i) for i in n_units[1:] ])
+        f_etas_string  = "-".join([ str(i) for i in f_etas[1:] ])
+        b_etas_string  = "-".join([ str(i) for i in b_etas[1:] ])
+        r_etas_string  = "-".join([ str(i) for i in r_etas[1:] ])
+        W_range_string = "-".join([ str(i) for i in W_range[1:] ])
+        Z_range_string = "-".join([ str(i) for i in Z_range[1:] ])
+        Y_range_string = "-".join([ str(i) for i in Y_range[1:] ])
+
+        if not os.path.exists(results_csv_filename):
+            line = "n_layers,n_units,f_etas,b_etas,r_etas,W_range,Z_range,Y_range,n_epochs,n_examples,n_test_examples,validation,output_burst_prob,desired_u,hard_m,hard_v,batch_size,test_error,test_cost,train_error,train_cost\n"
+
+            with open(results_csv_filename, "w+") as f:
+                f.write(line)
 
     # initialize dynamic variables
     W, b, Y, Z, v, h, u, u_t, p, p_t, beta, beta_t, mean_c, c = create_dynamic_variables(symmetric_weights=False)
@@ -294,7 +313,7 @@ def train(folder_prefix=None, continuing_folder=None):
             predicted_classes = torch.max(h[-1], 0)[1]
             target_classes    = torch.max(t, 0)[1]
 
-            train_error = int(torch.sum(torch.ne(predicted_classes, target_classes)))
+            train_error = 100.0*int(torch.sum(torch.ne(predicted_classes, target_classes)))/batch_size
 
             # do a backward pass
             backward(Y, Z, W, b, u, u_t, p, p_t, beta, beta_t, v, h, mean_c, c, t_input=t)
@@ -372,6 +391,35 @@ def train(folder_prefix=None, continuing_folder=None):
 
         end_time = time.time()
         print("Elapsed time: {} s.".format(end_time - start_time))
+
+        if folder_prefix is not None:
+            with open(results_csv_filename, "a+") as file:
+                if epoch_num > 0:
+                    #Move the pointer (similar to a cursor in a text editor) to the end of the file. 
+                    file.seek(0, os.SEEK_END)
+
+                    #This code means the following code skips the very last character in the file - 
+                    #i.e. in the case the last line is null we delete the last line 
+                    #and the penultimate one
+                    pos = file.tell() - 1
+
+                    #Read each character in the file one at a time from the penultimate 
+                    #character going backwards, searching for a newline character
+                    #If we find a new line, exit the search
+                    while pos > 0 and file.read(1) != "\n":
+                        pos -= 1
+                        file.seek(pos, os.SEEK_SET)
+
+                    #So long as we're not at the start of the file, delete all the characters ahead of this position
+                    if pos > 0:
+                        file.seek(pos, os.SEEK_SET)
+                        file.truncate()
+
+                    file.write("\n")
+
+                line = "{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}\n".format(n_layers, n_units_string, f_etas_string, b_etas_string, r_etas_string, W_range_string, Z_range_string, Y_range_string, epoch_num+1, n_examples, n_test_examples, validation, output_burst_prob, desired_u, hard_m, hard_v, batch_size, errors, test_costs, train_error, cost[-1])
+
+                file.write(line)
 
     if use_tensorboard:
         # close Tensorboard writer

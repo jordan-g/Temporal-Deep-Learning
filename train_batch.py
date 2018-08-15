@@ -6,7 +6,7 @@ import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument('folder_prefix', help='Prefix of folder name where data will be saved')
 parser.add_argument("-n_epochs", type=int, help="Number of epochs", default=50)
-parser.add_argument("-batch_size", type=int, help="Batch size", default=100)
+parser.add_argument("-batch_size", type=int, help="Batch size", default=1000)
 parser.add_argument("-store", type=int, help="Frequency (ie. every ___ examples) at which to save network state & get test error", default=1000)
 parser.add_argument("-n_layers", type=int, help="Number of layers", default=3)
 parser.add_argument("-n_units", help="Number of units in each layer", type=lambda s: [int(item) for item in s.split(',')], default=[784, 500, 10])

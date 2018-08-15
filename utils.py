@@ -15,6 +15,8 @@ def load_mnist_data(n_examples, n_test_examples, validation=True):
         x_set = x_set[:, :n_examples]
         t_set = t_set[:, :n_examples]
     except:
+        print("Converting MNIST data...")
+        
         import mnist
         
         try:

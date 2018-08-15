@@ -41,6 +41,7 @@ net.use_tensorboard   = args.use_tensorboard
 net.hard_m            = args.hard_m 
 net.hard_v            = args.hard_v 
 net.info              = args.info
+net.symmetric_weights = False
 
 # train the network
 net.train(folder_prefix=args.folder_prefix)
