@@ -10,6 +10,9 @@ import os
 import datetime
 import torch
 from torch.autograd import Variable
+import torch.optim as optim
+import torch.nn as nn
+import torch.nn.functional as F
 import time
 import json
 import shutil
@@ -33,12 +36,21 @@ else:
     n_examples      = 60000
     n_test_examples = 10000
 
-# load MNIST data
-x_set, t_set, x_test_set, t_test_set = utils.load_mnist_data(n_examples, n_test_examples, validation=validation)
-x_set      = torch.from_numpy(x_set).type(dtype)
-t_set      = torch.from_numpy(t_set).type(dtype)
-x_test_set = torch.from_numpy(x_test_set).type(dtype)
-t_test_set = torch.from_numpy(t_test_set).type(dtype)
+if dataset == "mnist":
+    # load MNIST data
+    x_set, t_set, x_test_set, t_test_set = utils.load_mnist_data(n_examples, n_test_examples, validation=validation)
+    x_set      = torch.from_numpy(x_set).type(dtype)
+    t_set      = torch.from_numpy(t_set).type(dtype)
+    x_test_set = torch.from_numpy(x_test_set).type(dtype)
+    t_test_set = torch.from_numpy(t_test_set).type(dtype)
+elif dataset == "cifar10":
+    x_set, t_set, x_test_set, t_test_set = utils.load_mnist_data(n_examples, n_test_examples, validation=validation)
+    x_set, t_set, x_test_set, t_test_set = cifar10(path="cifar10")
+
+    x_set      = torch.from_numpy(x_set.T).type(dtype)
+    t_set      = torch.from_numpy(t_set.T).type(dtype)
+    x_test_set = torch.from_numpy(x_test_set.T).type(dtype)
+    t_test_set = torch.from_numpy(t_test_set.T).type(dtype)
 
 # -------------------------- ACTIVATION FUNCTIONS -------------------------- #
 
@@ -151,6 +163,7 @@ def update_weights(W, b, Y, Z, partial_W, partial_b, partial_Y, partial_Z, delta
     return delta_W, delta_b, delta_Y, delta_Z, W, b, Y, Z
 
 def train(folder_prefix=None, continuing_folder=None):
+    global n_units
     if use_tensorboard:
         from tensorboardX import SummaryWriter
 
@@ -248,6 +261,14 @@ def train(folder_prefix=None, continuing_folder=None):
               
                 f.write(line)
 
+    conv_net = ConvNet()
+    criterion = nn.MSELoss()
+    optimizer = optim.SGD(conv_net.parameters(), lr=f_etas[0], momentum=momentum)
+
+    x = x_set[:, 0].unsqueeze(1)
+    outputs = conv_net(x)
+    n_units = [conv_net.size] + n_units[1:]
+
     # initialize dynamic variables
     W, b, Y, Z, v, h, u, u_t, p, p_t, beta, beta_t, mean_c, c, delta_W, delta_b, delta_Y, delta_Z = create_dynamic_variables(symmetric_weights=False)
     if continuing_folder is not None:
@@ -284,7 +305,7 @@ def train(folder_prefix=None, continuing_folder=None):
     example_indices = np.arange(n_examples)
 
     # calculate the initial test error as a percentage
-    errors, test_costs = test(W, b)
+    errors, test_costs = test(conv_net, W, b)
     print("Initial test error: {}%.".format(errors))
 
     if use_tensorboard:
@@ -310,6 +331,9 @@ def train(folder_prefix=None, continuing_folder=None):
             x = x_set[:, example_index].unsqueeze(1)
             t = t_set[:, example_index]
 
+            optimizer.zero_grad()
+            outputs = conv_net(x)
+
             # do a forward pass
             v, h = forward(W, b, v, h, f_input=x)
 
@@ -323,6 +347,10 @@ def train(folder_prefix=None, continuing_folder=None):
 
             # do a backward pass
             c, u, u_t, p, p_t, beta, beta_t, cost, cost_Z, partial_W, partial_b, partial_Z, partial_b_backprop = backward(Y, Z, W, b, u, u_t, p, p_t, beta, beta_t, v, h, mean_c, c, cost, cost_Z, partial_W, partial_b, partial_Z, partial_b_backprop, t_input=t)
+
+            loss = torch.sigmoid(Y[0].mm(beta[1]*hard_deriv(beta_t[1], mean=hard_m, variance=hard_v))) - torch.sigmoid(Y[0].mm(beta_t[1]*hard_deriv(beta_t[1], mean=hard_m, variance=hard_v)))
+            outputs.backward(gradient=loss)
+            optimizer.step()
 
             # record variables
             avg_costs           += cost[1:]
@@ -351,7 +379,7 @@ def train(folder_prefix=None, continuing_folder=None):
 
             if (example_num+1) % store == 0:
                 # get test error
-                errors, test_costs = test(W, b)
+                errors, test_costs = test(conv_net, W, b)
 
                 avg_costs           = [avg_costs[i]/(store) for i in range(n_layers-1)]
                 avg_Y_costs         = [avg_Y_costs[i]/(store) for i in range(n_layers-2)]
@@ -469,15 +497,17 @@ def train(folder_prefix=None, continuing_folder=None):
 
     return avg_costs, avg_backprop_angles, errors
 
-def test(W, b):
+def test(conv_net, W, b):
     v = [0] + [ torch.from_numpy(np.zeros((n_units[i], 1))).type(dtype) for i in range(1, n_layers) ]
     h = [0] + [ torch.from_numpy(np.zeros((n_units[i], 1))).type(dtype) for i in range(1, n_layers) ]
     
     x = x_test_set[:, :n_test_examples]
     t = t_test_set[:, :n_test_examples]
+
+    outputs = conv_net(x)
     
     # do a forward pass
-    v, h = forward(W, b, v, h, f_input=x)
+    forward(W, b, v, h, f_input=outputs.data)
     
     beta   = output_burst_prob*h[-1]
     beta_t = output_burst_prob*t
@@ -579,3 +609,37 @@ def save_results(path, avg_costs, avg_backprop_angles, errors, test_costs, avg_Y
     # f=open(os.path.join(path, "us.csv"),'a')
     # np.savetxt(f, us, delimiter=" ", fmt='%.5f')
     # f.close()
+
+class ConvNet(nn.Module):
+    def __init__(self):
+        super(ConvNet, self).__init__()
+        self.size = None
+        
+        if dataset == "mnist":
+            self.conv1 = nn.Conv2d(1, 64, 3)
+        elif dataset == "cifar10":
+            self.conv1 = nn.Conv2d(3, 64, 3)
+        self.pool1 = nn.MaxPool2d(2, 2)
+        # self.conv2 = nn.Conv2d(64, 256, 3)
+        # self.pool2 = nn.MaxPool2d(2, 2)
+
+        if cuda:
+            self.cuda()
+
+    def forward(self, x):
+        batch_size = x.size()[1]
+        if dataset == "mnist":
+            x = self.pool1(F.relu(self.conv1(Variable(x).contiguous().view(batch_size, 1, 28, 28))))
+        elif dataset == "cifar10":
+            x = self.pool1(F.relu(self.conv1(Variable(x).contiguous().view(batch_size, 3, 32, 32))))
+        # x = self.pool2(F.relu(self.conv2(x)))
+        self.size = self.num_flat_features(x)
+        x = x.view(self.size, batch_size)
+        return x
+
+    def num_flat_features(self, x):
+        size = x.size()[1:]  # all dimensions except the batch dimension
+        num_features = 1
+        for s in size:
+            num_features *= s
+        return num_features

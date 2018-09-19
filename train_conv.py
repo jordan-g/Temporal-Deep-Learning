@@ -12,7 +12,7 @@ parser.add_argument("-n_units", help="Number of units in each layer", type=lambd
 parser.add_argument("-W_range", help="Range of initial feedforward weights", type=lambda s: [float(item) for item in s.split(',')], default=[0, 0.1, 0.1, 0.01])
 parser.add_argument("-Z_range", help="Range of initial recurrent weights", type=lambda s: [float(item) for item in s.split(',')], default=[0, 0.01, 0.01])
 parser.add_argument("-Y_range", help="Range of initial feedback weights", type=lambda s: [float(item) for item in s.split(',')], default=[0, 1.0, 1.0])
-parser.add_argument("-f_etas", help="Feedforward learning rates", type=lambda s: [float(item) for item in s.split(',')], default=[0, 0.5, 0.5, 0.01])
+parser.add_argument("-f_etas", help="Feedforward learning rates", type=lambda s: [float(item) for item in s.split(',')], default=[0.1, 0.5, 0.5, 0.01])
 parser.add_argument("-r_etas", help="Recurrent learning rates", type=lambda s: [float(item) for item in s.split(',')], default=[0, 0, 0])
 parser.add_argument("-b_etas", help="Feedback learning rates", type=lambda s: [float(item) for item in s.split(',')], default=[0, 0, 0])
 parser.add_argument("-output_burst_prob", type=float, help="Output layer burst probability", default=0.2)
@@ -23,10 +23,11 @@ parser.add_argument("-hard_v", type=float, help="Hard derivative variance", defa
 parser.add_argument("-info", type=str, help="Any other information about the experiment", default="")
 parser.add_argument("-symmetric_weights", type=bool, help="Whether to use symmetric weights", default=False)
 parser.add_argument("-momentum", type=float, help="Momentum", default=0)
+parser.add_argument("-dataset", type=str, help="Which dataset to train on ('mnist' or 'cifar10')", default="mnist")
 args=parser.parse_args()
 
 # set network parameters
-import network as net
+import network_conv as net
 net.n_epochs          = args.n_epochs
 net.store             = args.store
 net.n_layers          = args.n_layers
@@ -45,6 +46,7 @@ net.hard_v            = args.hard_v
 net.info              = args.info
 net.symmetric_weights = args.symmetric_weights
 net.momentum          = args.momentum
+net.dataset           = args.dataset
 
 # train the network
-net.train(folder_prefix=args.folder_prefix)
+net.train(folder_prefix=None)
