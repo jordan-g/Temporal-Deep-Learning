@@ -27,30 +27,32 @@ else:
     dtype = torch.FloatTensor
     print("Not using CUDA.")
 
-# set number of training & testing examples
-validation = True
-if validation:
-    n_examples      = 50000
-    n_test_examples = 10000
-else:
-    n_examples      = 60000
-    n_test_examples = 10000
+def load_dataset():
+    global x_set, t_set, x_test_set, t_test_set, n_examples, n_test_examples
 
-if dataset == "mnist":
-    # load MNIST data
-    x_set, t_set, x_test_set, t_test_set = utils.load_mnist_data(n_examples, n_test_examples, validation=validation)
-    x_set      = torch.from_numpy(x_set).type(dtype)
-    t_set      = torch.from_numpy(t_set).type(dtype)
-    x_test_set = torch.from_numpy(x_test_set).type(dtype)
-    t_test_set = torch.from_numpy(t_test_set).type(dtype)
-elif dataset == "cifar10":
-    x_set, t_set, x_test_set, t_test_set = utils.load_mnist_data(n_examples, n_test_examples, validation=validation)
-    x_set, t_set, x_test_set, t_test_set = cifar10(path="cifar10")
+    # set number of training & testing examples
+    if validation:
+        n_examples      = 50000
+        n_test_examples = 10000
+    else:
+        n_examples      = 60000
+        n_test_examples = 10000
 
-    x_set      = torch.from_numpy(x_set.T).type(dtype)
-    t_set      = torch.from_numpy(t_set.T).type(dtype)
-    x_test_set = torch.from_numpy(x_test_set.T).type(dtype)
-    t_test_set = torch.from_numpy(t_test_set.T).type(dtype)
+    if dataset == "mnist":
+        # load MNIST data
+        x_set, t_set, x_test_set, t_test_set = utils.load_mnist_data(n_examples, n_test_examples, validation=validation)
+        x_set      = torch.from_numpy(x_set).type(dtype)
+        t_set      = torch.from_numpy(t_set).type(dtype)
+        x_test_set = torch.from_numpy(x_test_set).type(dtype)
+        t_test_set = torch.from_numpy(t_test_set).type(dtype)
+    elif dataset == "cifar10":
+        x_set, t_set, x_test_set, t_test_set = utils.load_mnist_data(n_examples, n_test_examples, validation=validation)
+        x_set, t_set, x_test_set, t_test_set = cifar10(path="cifar10")
+
+        x_set      = torch.from_numpy(x_set.T).type(dtype)
+        t_set      = torch.from_numpy(t_set.T).type(dtype)
+        x_test_set = torch.from_numpy(x_test_set.T).type(dtype)
+        t_test_set = torch.from_numpy(t_test_set.T).type(dtype)
 
 # -------------------------- ACTIVATION FUNCTIONS -------------------------- #
 

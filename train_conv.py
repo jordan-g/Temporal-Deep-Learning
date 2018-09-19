@@ -26,8 +26,6 @@ parser.add_argument("-momentum", type=float, help="Momentum", default=0)
 parser.add_argument("-dataset", type=str, help="Which dataset to train on ('mnist' or 'cifar10')", default="mnist")
 args=parser.parse_args()
 
-dataset = args.dataset
-
 # set network parameters
 import network_conv as net
 net.n_epochs          = args.n_epochs
@@ -48,6 +46,10 @@ net.hard_v            = args.hard_v
 net.info              = args.info
 net.symmetric_weights = args.symmetric_weights
 net.momentum          = args.momentum
+net.dataset           = args.dataset
+
+# load the dataset
+net.load_dataset()
 
 # train the network
 net.train(folder_prefix=None)
