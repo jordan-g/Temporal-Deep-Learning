@@ -337,7 +337,7 @@ def train(folder_prefix=None, continuing_folder=None):
             outputs = conv_net(x)
 
             # do a forward pass
-            v, h = forward(W, b, v, h, f_input=x)
+            v, h = forward(W, b, v, h, f_input=outputs.data)
 
             # get the predicted & target class
             predicted_class = int(torch.max(h[-1], 0)[1])
