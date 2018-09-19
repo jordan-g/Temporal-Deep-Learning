@@ -377,7 +377,7 @@ def train(folder_prefix=None, continuing_folder=None):
             delta_W, delta_b, delta_Y, delta_Z, W, b, Y, Z = update_weights(W, b, Y, Z, partial_W, partial_b, partial_Y, partial_Z, delta_W, delta_b, delta_Y, delta_Z)
 
             if symmetric_weights:
-                Y  = [0] + [ W[i+1].transpose(0, 1) for i in range(1, n_layers-1) ]
+                Y  = [ W[i+1].transpose(0, 1) for i in range(0, n_layers-1) ]
 
             if (example_num+1) % store == 0:
                 # get test error
@@ -547,9 +547,9 @@ def create_dynamic_variables(symmetric_weights=False):
     W       = [0] + [ torch.from_numpy(np.random.uniform(-W_range[i], W_range[i], size=(n_units[i], n_units[i-1]))).type(dtype) for i in range(1, n_layers) ]
     b       = [0] + [ torch.from_numpy(np.zeros((n_units[i], 1))).type(dtype) for i in range(1, n_layers) ]
     if symmetric_weights:
-        Y   = [0] + [ torch.from_numpy(W[i+1].T.copy()).type(dtype) for i in range(0, n_layers-1) ]
+        Y   = [ torch.from_numpy(W[i+1].T.copy()).type(dtype) for i in range(0, n_layers-1) ]
     else:
-        Y   = [0] + [ torch.from_numpy(np.random.uniform(-Y_range[i], Y_range[i], size=(n_units[i], n_units[i+1]))).type(dtype) for i in range(0, n_layers-1) ]
+        Y   = [ torch.from_numpy(np.random.uniform(-Y_range[i], Y_range[i], size=(n_units[i], n_units[i+1]))).type(dtype) for i in range(0, n_layers-1) ]
     Z       = [0] + [ torch.from_numpy(np.random.uniform(0, Z_range[i], size=(n_units[i], n_units[i]))).type(dtype) for i in range(1, n_layers-1) ]
     v       = [0] + [ torch.from_numpy(np.zeros((n_units[i], 1))).type(dtype) for i in range(1, n_layers) ]
     h       = [0] + [ torch.from_numpy(np.zeros((n_units[i], 1))).type(dtype) for i in range(1, n_layers) ]
