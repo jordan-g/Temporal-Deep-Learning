@@ -24,6 +24,7 @@ parser.add_argument("-info", type=str, help="Any other information about the exp
 parser.add_argument("-symmetric_weights", type=bool, help="Whether to use symmetric weights", default=False)
 parser.add_argument("-momentum", type=float, help="Momentum", default=0)
 parser.add_argument("-dataset", type=str, help="Which dataset to train on ('mnist' or 'cifar10')", default="mnist")
+parser.add_argument("-validation", type=bool, help="Whether to use validation set", default=True)
 args=parser.parse_args()
 
 # set network parameters
@@ -47,6 +48,7 @@ net.info              = args.info
 net.symmetric_weights = args.symmetric_weights
 net.momentum          = args.momentum
 net.dataset           = args.dataset
+net.validation        = args.validation
 
 # load the dataset
 net.load_dataset()
